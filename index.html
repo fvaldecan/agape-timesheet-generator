@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agape Timesheet Builder</title>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #1c2321;
+    --paper: #f8f6fb;
+    --panel: #ffffff;
+    --line: #ded6ea;
+    --brand-purple: #64368a;
+    --brand-purple-dim: #ece4f4;
+    --brand-lime: #cddb00;
+    --warn: #b5562f;
+    --warn-dim: #f5e4db;
+    --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    --serif: "Source Serif 4", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    line-height: 1.5;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { margin-bottom: 32px; }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 28px;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .sub { color: #5a5f57; font-size: 14px; font-family: var(--mono); }
+  .gate {
+    max-width: 360px;
+    margin: 120px auto;
+    padding: 32px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+  }
+  .gate h2 { font-size: 18px; margin: 0 0 16px; }
+  .gate input { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid var(--line); margin-bottom: 12px; font-family: var(--mono); }
+  .gate button, .btn {
+    background: var(--brand-purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+  }
+  .gate button:hover, .btn:hover { background: #502b6e; }
+  .btn.secondary { background: transparent; color: var(--brand-purple); border: 1px solid var(--brand-purple); }
+  .bookmarklet-btn {
+    display: inline-block;
+    background: var(--brand-lime);
+    color: var(--ink);
+    border: 2px dashed rgba(28,35,33,0.35);
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: grab;
+    user-select: none;
+    border-radius: 2px;
+  }
+  .bookmarklet-btn:active { cursor: grabbing; }
+  .bookmarklet-btn.secondary {
+    background: transparent;
+    color: var(--brand-purple);
+    border: 2px dashed var(--brand-purple);
+  }
+  .btn.secondary:hover { background: var(--brand-purple-dim); }
+  .gate .err { color: var(--warn); font-size: 13px; margin-top: -4px; margin-bottom: 12px; display: none; }
+  section { background: var(--panel); border: 1px solid var(--line); padding: 24px; margin-bottom: 20px; }
+  section h2 {
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #5a5f57;
+    margin: 0 0 16px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 140px;
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    background: #fcfbf8;
+    resize: vertical;
+  }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  #parseStatus { line-height: 1.5; }
+  #parseStatus.status-ok { color: var(--brand-purple); }
+  #parseStatus.status-warn { color: var(--warn); font-weight: 600; }
+  details { margin-top: 16px; }
+  summary {
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--brand-purple);
+    letter-spacing: 0.02em;
+  }
+  .config-grid { margin-top: 14px; }
+  .config-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .config-row input { padding: 7px 9px; border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
+  .config-row button { background: none; border: 1px solid var(--line); cursor: pointer; color: #a04; font-family: var(--mono); font-size: 11px; }
+  .rate-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    padding: 8px;
+    background: #fcfbf8;
+    border: 1px solid var(--line);
+  }
+  .rate-row input, .rate-row select {
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .rate-row .rate-match { flex: 1 1 160px; min-width: 140px; }
+  .rate-row .rate-type { flex: 0 0 auto; }
+  .rate-row .rate-fields { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; }
+  .rate-row .rate-fields input { width: 80px; }
+  .rate-row .rate-x, .rate-row .rate-suffix { font-family: var(--mono); font-size: 11px; color: #8a8f86; white-space: nowrap; }
+  .affix {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--line);
+    background: #fff;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #5a5f57;
+    padding: 0 6px;
+    gap: 2px;
+  }
+  .affix input { border: none; width: 60px; padding: 6px 2px; font-family: var(--mono); font-size: 12px; }
+  .affix input:focus { outline: none; }
+  #ratesDirtyBanner {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    background: var(--warn-dim);
+    border-left: 4px solid var(--warn);
+    padding: 10px 14px;
+    margin-top: 12px;
+    font-size: 13px;
+    font-family: var(--serif);
+  }
+  .rate-row button { background: none; border: 1px solid var(--line); cursor: pointer; color: #a04; font-family: var(--mono); font-size: 11px; padding: 6px 10px; }
+  .cell-input {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 12px;
+    background: #fffef9;
+  }
+  td .dim { color: #b8bcb3; }
+  .amount-input { display: inline-block; }
+  .reset-btn {
+    background: none; border: none; cursor: pointer; color: var(--warn);
+    font-size: 13px; margin-left: 2px; padding: 0 2px;
+  }
+  .row-del {
+    background: none; border: none; cursor: pointer; color: #b8bcb3;
+    font-size: 15px; padding: 0 4px;
+  }
+  .row-del:hover { color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #5a5f57; background: #fcfbf8; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  .loc-heading {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--brand-purple);
+    letter-spacing: 0.04em;
+    margin: 20px 0 4px;
+  }
+  .subtotal-row td { font-weight: 600; border-top: 1px solid var(--ink); border-bottom: none; }
+  .total {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 600;
+    margin-top: 20px;
+    text-align: right;
+  }
+  .comp-notes {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  .comp-notes-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: #5a5f57;
+    margin-bottom: 8px;
+  }
+  .comp-notes ul { margin: 0; padding-left: 20px; }
+  .comp-notes li { font-size: 13px; margin-bottom: 4px; color: #3a3f38; }
+  .warn {
+    background: var(--warn-dim);
+    border-left: 3px solid var(--warn);
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-top: 12px;
+    font-family: var(--mono);
+  }
+  .warn div { margin-bottom: 4px; }
+  .warn-strong {
+    background: #fbe2d8;
+    border-left: 4px solid var(--warn);
+    font-family: var(--serif);
+    font-size: 14px;
+  }
+  .empty { color: #8a8f86; font-size: 14px; font-style: italic; }
+  .actions { margin-top: 20px; display: flex; gap: 10px; }
+  footer { margin-top: 40px; font-size: 12px; color: #8a8f86; font-family: var(--mono); text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <h2>Agape Timesheet Builder</h2>
+  <input id="pw" type="password" placeholder="Access code">
+  <div class="err" id="pwErr">Wrong code — check with whoever shared this link.</div>
+  <button onclick="checkPassword()">Enter</button>
+</div>
+
+<div id="app" class="wrap" style="display:none">
+  <header>
+    <h1>Agape Timesheet Builder</h1>
+    <div class="sub">turn your schedule into a commission sheet</div>
+  </header>
+
+  <section>
+    <h2>1. Set up the "Get My Schedule" button (one time only)</h2>
+    <p style="font-size:13px;color:#5a5f57;margin-top:0">
+      Grabs your schedule automatically — no more copying it by hand.
+    </p>
+    <p style="font-size:13px;color:#5a5f57">
+      <strong>Drag this to your bookmarks bar.</strong> Don't see the bar? Press
+      <strong>Ctrl+Shift+B</strong> (<strong>Cmd+Shift+B</strong> on Mac).
+    </p>
+    <div class="row" style="gap:16px">
+      <a class="bookmarklet-btn" id="bookmarkletBtn" href="javascript:void(0);"
+         onclick="alert('Drag this button up to your bookmarks bar instead of clicking it.'); return false;">
+        &#128279; Get My Schedule
+      </a>
+    </div>
+    <details style="margin-top:12px">
+      <summary>Dragging isn't working? Copy and paste it in instead</summary>
+      <div style="font-size:13px;color:#5a5f57;margin-top:10px;line-height:1.6">
+        <ol style="padding-left:18px">
+          <li>Right-click your bookmarks bar and choose <strong>Add page</strong> (or
+          <strong>New bookmark</strong>).</li>
+          <li>Name it <strong>Get My Schedule</strong> (or anything you'll recognize).</li>
+          <li>For the web address / URL, copy everything in the box below and paste it in.</li>
+          <li>Save.</li>
+        </ol>
+        <textarea id="bookmarkletCode" readonly onclick="this.select()"
+          style="width:100%;min-height:70px;font-family:var(--mono);font-size:11px;padding:8px;border:1px solid var(--line);background:#fcfbf8;margin-top:8px"></textarea>
+        <button class="btn secondary" style="margin-top:8px" onclick="copyBookmarkletCode()">Copy</button>
+        <span id="copyStatus" style="font-size:12px;color:var(--brand-purple);margin-left:8px"></span>
+      </div>
+    </details>
+    <p style="font-size:13px;color:#5a5f57;margin-top:14px">
+      <strong>To use it:</strong> open your Club Automation schedule, click the button, then
+      paste what it copies below.
+    </p>
+  </section>
+
+  <section>
+    <h2>2. Paste your schedule</h2>
+    <p style="font-size:13px;color:#5a5f57;margin-top:0">
+      Club Automation only shows one week at a time, so for a multi-week pay period, paste
+      each week separately. <strong>Parse</strong> shows a breakdown first (blocked, empty,
+      already added) — check it, then <strong>Add to sheet</strong>.
+      (No bookmarklet: right-click the schedule &rarr; Inspect &rarr; find
+      <code>&lt;div id="court_schedule"&gt;</code> &rarr; Copy &rarr; Copy outerHTML.)
+    </p>
+    <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
+    <div class="row">
+      <button class="btn" onclick="runParse()">Parse</button>
+      <button class="btn" id="confirmAddBtn" style="display:none" onclick="confirmAdd()">Add to sheet</button>
+    </div>
+    <div id="parseStatus" class="row" style="font-family:var(--mono);font-size:12px;color:#5a5f57"></div>
+  </section>
+
+  <section>
+    <h2>3. Your settings <span style="text-transform:none;letter-spacing:0">(remembered next time you come back)</span></h2>
+    <div class="row">
+      <label style="font-family:var(--mono);font-size:12px">Name on sheet</label>
+      <input id="coachName" type="text" style="padding:7px 9px;border:1px solid var(--line);font-family:var(--mono);font-size:12px;min-width:220px">
+    </div>
+
+    <details open>
+      <summary>Pay rates</summary>
+      <div class="config-grid" id="rateRows"></div>
+      <button class="btn secondary" style="margin-top:6px" onclick="addRateRow()">+ add a rate</button>
+      <p style="font-size:12px;color:#8a8f86;margin-top:8px">
+        Type a word from your booking titles (like "PL" or "Drill"), choose
+        <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
+        match wins, so put specific rows above general ones. <strong>Per-person split</strong> is
+        for group classes paid per attendee — you'll enter the headcount after pasting. "# people"
+        is editable on every row (handy for a semi-private with 2 students).
+      </p>
+      <div id="ratesDirtyBanner">
+        <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
+        <button class="btn" style="padding:6px 12px;font-size:12px" onclick="reapplyRatesToSheet()">Update commission sheet</button>
+      </div>
+    </details>
+
+    <details>
+      <summary>Compensation summary (optional)</summary>
+      <p style="font-size:12px;color:#8a8f86;margin:8px 0">
+        Paste your contract's rate bullets here — same list you'd copy from a Word doc or PDF.
+        Shows up at the bottom of your sheet, on screen and in the download.
+      </p>
+      <textarea id="compNotes" placeholder="e.g.
+$45/hr on private lessons
+$40/hr on programmed groups, drills, classes
+$30/hr all events &amp; camps"
+        style="width:100%;min-height:110px;font-family:var(--mono);font-size:12px;padding:10px;border:1px solid var(--line);background:#fcfbf8"
+        onchange="state.compNotes=this.value;saveSettings();if(lastResult)renderResults();"></textarea>
+    </details>
+  </section>
+
+  <section id="resultsSection" style="display:none">
+    <h2>4. Commission sheet</h2>
+    <div id="results"></div>
+    <div class="actions">
+      <button class="btn" onclick="downloadDocx()">Download .docx</button>
+      <button class="btn secondary" onclick="downloadCsv()">Download .csv</button>
+      <button class="btn secondary" onclick="clearAll()">Clear &amp; start over</button>
+    </div>
+  </section>
+
+  <footer>runs entirely client-side — your schedule data never leaves this browser</footer>
+</div>
+
+<script>
+// ---------------------------------------------------------------------
+// Access gate (deterrent only — see README before treating this as real security)
+// ---------------------------------------------------------------------
+const ACCESS_CODE = "agape2026"; // CHANGE THIS before you deploy
+
+function checkPassword() {
+  const val = document.getElementById('pw').value;
+  if (val === ACCESS_CODE) {
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    sessionStorage.setItem('ts_unlocked', '1');
+  } else {
+    document.getElementById('pwErr').style.display = 'block';
+  }
+}
+if (sessionStorage.getItem('ts_unlocked') === '1') {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
+
+// ---------------------------------------------------------------------
+// Settings persistence (localStorage — per-browser, never committed to repo)
+// ---------------------------------------------------------------------
+const DEFAULT_RATES = [
+  { match: "PL", matchMode: "startsWith", type: "hourly", mode: "flat", rate: 45, defaultPeople: 1 },
+  { match: "meet and greet", matchMode: "contains", type: "hourly", mode: "flat", rate: 30, defaultPeople: 1 },
+  { match: "drill", matchMode: "contains", type: "hourly", mode: "flat", rate: 40, defaultPeople: 1 },
+  { match: "group class", matchMode: "contains", type: "per_person", pricePerPerson: 20, coachShare: 50 },
+];
+
+function loadSettings() {
+  let rates;
+  try {
+    rates = JSON.parse(localStorage.getItem('ts_rates') || 'null') || DEFAULT_RATES;
+  } catch (e) {
+    rates = DEFAULT_RATES; // corrupted saved data — fall back rather than crash the whole page
+  }
+  const name = localStorage.getItem('ts_name') || '';
+  const compNotes = localStorage.getItem('ts_compNotes') || '';
+  return { rates, name, compNotes };
+}
+function saveSettings() {
+  localStorage.setItem('ts_rates', JSON.stringify(state.rates));
+  localStorage.setItem('ts_name', document.getElementById('coachName').value);
+  localStorage.setItem('ts_compNotes', state.compNotes || '');
+}
+
+let state = loadSettings();
+document.getElementById('coachName').value = state.name;
+document.getElementById('compNotes').value = state.compNotes || '';
+
+function renderRates() {
+  const el = document.getElementById('rateRows');
+  el.innerHTML = '';
+  state.rates.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'rate-row';
+
+    let typeFields;
+    if (r.type === 'per_person') {
+      typeFields = `
+        <span class="affix">$<input value="${r.pricePerPerson ?? 20}" type="number" step="0.01" title="Price charged per person"
+          onchange="state.rates[${i}].pricePerPerson=Number(this.value);saveSettings();markRatesDirty();"></span>
+        <span class="rate-suffix">per person</span>
+        <span class="rate-x">&times;</span>
+        <span class="affix"><input value="${r.coachShare ?? 50}" type="number" title="Percent of that price that goes to the coach"
+          onchange="state.rates[${i}].coachShare=Number(this.value);saveSettings();markRatesDirty();">%</span>
+        <span class="rate-suffix">to coach</span>
+      `;
+    } else if (r.mode === 'split') {
+      const clientRate = r.clientRate ?? 65;
+      const agapeCut = r.agapeCut ?? 20;
+      typeFields = `
+        <select class="rate-mode" onchange="state.rates[${i}].mode=this.value;renderRates();saveSettings();markRatesDirty();">
+          <option value="flat">Flat $/hr</option>
+          <option value="split" selected>Client rate − Agape cut</option>
+        </select>
+        <span class="affix">$<input value="${clientRate}" type="number" step="0.01" title="What the client is billed per hour"
+          onchange="state.rates[${i}].clientRate=Number(this.value);saveSettings();markRatesDirty();"></span>
+        <span class="rate-x">&minus;</span>
+        <span class="affix">$<input value="${agapeCut}" type="number" step="0.01" title="What Agape keeps per hour"
+          onchange="state.rates[${i}].agapeCut=Number(this.value);saveSettings();markRatesDirty();"></span>
+        <span class="rate-suffix">= $${(clientRate - agapeCut).toFixed(2)}/hr to you</span>
+        <span class="rate-x">&middot;</span>
+        <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type"
+          onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();markRatesDirty();">
+        <span class="rate-suffix">people</span>
+      `;
+    } else {
+      typeFields = `
+        <select class="rate-mode" onchange="state.rates[${i}].mode=this.value;renderRates();saveSettings();markRatesDirty();">
+          <option value="flat" selected>Flat $/hr</option>
+          <option value="split">Client rate − Agape cut</option>
+        </select>
+        <span class="affix">$<input value="${r.rate ?? 45}" type="number" step="0.01" title="Pay per hour"
+          onchange="state.rates[${i}].rate=Number(this.value);saveSettings();markRatesDirty();"></span>
+        <span class="rate-suffix">/hr to you</span>
+        <span class="rate-x">&middot;</span>
+        <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type"
+          onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();markRatesDirty();">
+        <span class="rate-suffix">people</span>
+      `;
+    }
+
+    row.innerHTML = `
+      <input class="rate-match" value="${escapeHtml(r.match)}" placeholder="Title text..."
+        onchange="state.rates[${i}].match=this.value;saveSettings();markRatesDirty();">
+      <select class="rate-matchmode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();markRatesDirty();">
+        <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>Starts with</option>
+        <option value="contains" ${r.matchMode !== 'startsWith' ? 'selected' : ''}>Contains</option>
+      </select>
+      <select class="rate-type" onchange="state.rates[${i}].type=this.value;renderRates();saveSettings();markRatesDirty();">
+        <option value="hourly" ${r.type !== 'per_person' ? 'selected' : ''}>Hourly</option>
+        <option value="per_person" ${r.type === 'per_person' ? 'selected' : ''}>Per-person split</option>
+      </select>
+      <span class="rate-fields">${typeFields}</span>
+      <button onclick="state.rates.splice(${i},1);renderRates();saveSettings();markRatesDirty();">remove</button>
+    `;
+    el.appendChild(row);
+  });
+}
+function addRateRow() {
+  state.rates.push({ match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', rate: 45, defaultPeople: 1 });
+  renderRates();
+  markRatesDirty();
+}
+
+// ---------------------------------------------------------------------
+// Rate-rule changes don't retroactively touch shifts already on the
+// sheet (each one keeps a snapshot of the rule that matched it at parse
+// time) — so editing a rule after adding shifts needs an explicit,
+// visible "update the sheet" step rather than silently doing nothing.
+// ---------------------------------------------------------------------
+function markRatesDirty() {
+  const banner = document.getElementById('ratesDirtyBanner');
+  if (!banner) return;
+  banner.style.display = lastResult && lastResult.shifts.length > 0 ? 'flex' : 'none';
+}
+function reapplyRatesToSheet() {
+  if (!lastResult) return;
+  lastResult.shifts.forEach(s => {
+    s.rule = classifyRate(s.type);
+  });
+  renderResults();
+  const banner = document.getElementById('ratesDirtyBanner');
+  if (banner) banner.style.display = 'none';
+}
+
+function escapeHtml(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Splits pasted contract/compensation text into clean lines, stripping
+// whatever bullet character it came in with (Word/PDF paste-ins commonly
+// use "●", "•", "-", "*", or a number) so we can re-render consistently.
+function parseBulletLines(text) {
+  return (text || '')
+    .split('\n')
+    .map(line => line.replace(/^[\s●•▪○*-]+/, '').replace(/^\d+[.)]\s*/, '').trim())
+    .filter(line => line.length > 0)
+    .filter(line => line.toUpperCase() !== 'COMPENSATION'); // we render our own heading, skip a duplicate
+}
+
+renderRates();
+
+// The bookmarklet used to embed ~3,800 characters of logic directly in the
+// button's href — too long to copy/paste reliably in some browsers'
+// bookmark editors (shows up truncated with "..."). Instead, the button now
+// holds a tiny "loader" (~150 chars) that fetches the real logic fresh from
+// bookmarklet.js (hosted alongside this page) every time it's clicked. This
+// also means updates to bookmarklet.js take effect immediately without
+// anyone needing to re-drag the button.
+//
+// This whole block is wrapped defensively: some hosting/preview contexts
+// (e.g. a sandboxed iframe preview) give window.location.href a value the
+// URL constructor rejects. That must never be allowed to crash the rest of
+// this script — everything below this point (shiftIdCounter, lastResult,
+// etc.) depends on script execution continuing past this point.
+try {
+  let bookmarkletJsUrl;
+  try {
+    bookmarkletJsUrl = new URL('bookmarklet.js', window.location.href).href;
+  } catch (e) {
+    // Fallback: plain string manipulation instead of the strict URL API —
+    // strip any query/hash, then strip the filename, keeping the folder path.
+    const base = window.location.href.split(/[?#]/)[0].replace(/[^\/]*$/, '');
+    bookmarkletJsUrl = base + 'bookmarklet.js';
+  }
+  const loaderCode = `javascript:(function(){var s=document.createElement('script');s.src='${bookmarkletJsUrl}?t='+Date.now();document.body.appendChild(s);})();`;
+  const bookmarkletBtn = document.getElementById('bookmarkletBtn');
+  if (bookmarkletBtn) bookmarkletBtn.setAttribute('href', loaderCode);
+  const bookmarkletCodeBox = document.getElementById('bookmarkletCode');
+  if (bookmarkletCodeBox) bookmarkletCodeBox.value = loaderCode;
+} catch (e) {
+  console.error('Could not set up the bookmarklet button:', e);
+}
+
+function copyBookmarkletCode() {
+  const ta = document.getElementById('bookmarkletCode');
+  ta.select();
+  ta.setSelectionRange(0, ta.value.length);
+  const status = document.getElementById('copyStatus');
+  const done = () => { status.textContent = 'Copied!'; setTimeout(() => { status.textContent = ''; }, 2500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(ta.value).then(done, () => { status.textContent = 'Select the text above and copy it manually.'; });
+  } else {
+    try { document.execCommand('copy'); done(); } catch (e) { status.textContent = 'Select the text above and copy it manually.'; }
+  }
+}
+
+// ---------------------------------------------------------------------
+// Parser — mirrors parse_schedule.py, but reads the DOM directly
+// ---------------------------------------------------------------------
+function parseSchedule(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const cells = doc.querySelectorAll('td[id^="court_"]');
+  const events = [];
+
+  cells.forEach(td => {
+    const block = td.querySelector('.eventBlock');
+    if (!block) return;
+
+    const m = td.id.match(/^court_(\d{4}-\d{2}-\d{2})_row_(\d{2}:\d{2})/);
+    if (!m) return;
+    const [_, dateStr, timeStr] = m;
+    const start = new Date(`${dateStr}T${timeStr}:00`);
+    const durationHrs = parseFloat(block.getAttribute('data-duration') || '0');
+    const end = new Date(start.getTime() + durationHrs * 3600 * 1000);
+
+    const h4 = block.querySelector('h4');
+    if (!h4) return;
+    const h4Clone = h4.cloneNode(true);
+    h4Clone.querySelectorAll('.icons').forEach(n => n.remove());
+    const title = h4Clone.textContent.trim();
+
+    const subtitleDiv = h4.nextElementSibling;
+    let subtitle = '';
+    let nameCount = 0;
+    if (subtitleDiv) {
+      const clone = subtitleDiv.cloneNode(true);
+      const brCount = clone.querySelectorAll('br').length;
+      clone.querySelectorAll('br').forEach(br => br.replaceWith(' '));
+      subtitle = clone.textContent.replace(/\s+/g, ' ').trim();
+      if (subtitle) nameCount = brCount + 1; // e.g. "Lock<br>Yasutake" = 2 names
+    }
+
+    const fmtTime = d => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(' ', '');
+    const fmtDate = d => `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+
+    // If the enriched bookmarklet ran, each eventBlock carries a
+    // data-detail attribute (URL-encoded event-full-info response HTML)
+    // with real Location/Service/Attendance — use it when present.
+    let detail = null;
+    const detailAttr = block.getAttribute('data-detail');
+    if (detailAttr) {
+      try { detail = parseEventInfoHtml(decodeURIComponent(detailAttr)); } catch (e) { detail = null; }
+    }
+
+    // "PL: <coach name>" is Club Automation's label for who's teaching —
+    // redundant here since the coach's name is already at the top of the
+    // sheet, so we drop it and just show "PL: <client>".
+    const displayTitle = title === 'Group class'
+      ? `${title}: ${subtitle}`
+      : (title.startsWith('PL') ? `PL: ${subtitle}` : `${title} ${subtitle}`.trim());
+
+    events.push({
+      date: fmtDate(start),
+      rawTitle: title,
+      title: displayTitle,
+      client: title.startsWith('PL') ? subtitle : '',
+      start: fmtTime(start),
+      end: fmtTime(end),
+      durationHrs,
+      nameCount,                                    // # of names listed on the booking itself (semi-privates etc.)
+      detailLocation: detail ? detail.location : null,
+      detailAttendance: detail ? detail.attendanceCurrent : null,
+      detailAttendanceMax: detail ? detail.attendanceMax : null,
+      _sort: start,
+    });
+  });
+
+  events.sort((a, b) => a._sort - b._sort);
+  return events;
+}
+
+// ---------------------------------------------------------------------
+// Calculator — mirrors generate_timesheet.py, plus per-row editable
+// location and attendee count (nothing here is auto-defaulted silently;
+// anything unresolved lands in an "Unassigned" bucket for manual review).
+// ---------------------------------------------------------------------
+function classifyRate(title) {
+  for (const r of state.rates) {
+    if (!r.match) continue;
+    const mode = r.matchMode || 'contains';
+    const matches = mode === 'startsWith'
+      ? title.toUpperCase().startsWith(r.match.trim().toUpperCase())
+      : title.toLowerCase().includes(r.match.toLowerCase());
+    if (matches) return r;
+  }
+  return { match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', rate: 45, defaultPeople: 1 }; // default
+}
+// Group class titles sometimes end with "- FV" / "- CM"; use that as a hint only.
+function locationHint(title) {
+  const m = title.match(/-\s*(FV|CM)\s*$/i);
+  if (!m) return null;
+  return m[1].toUpperCase() === 'FV' ? 'Fountain Valley' : 'Costa Mesa';
+}
+
+// Parses the balloon popup HTML Club Automation returns when you click an
+// event (see BOOKMARKLET.md for how this gets captured). Not wired up to
+// an automatic fetch yet — we don't have the request URL/params confirmed.
+// Once we do, this is ready to plug into an automated per-event lookup.
+function parseEventInfoHtml(contentHtml) {
+  const doc = new DOMParser().parseFromString(contentHtml, 'text/html');
+  const result = {};
+  doc.querySelectorAll('.label').forEach(labelEl => {
+    const label = labelEl.textContent.replace(':', '').trim().toLowerCase();
+    let val = '';
+    let node = labelEl.nextSibling;
+    while (node && !(node.nodeType === 1 && node.tagName === 'BR')) {
+      val += node.textContent || '';
+      node = node.nextSibling;
+    }
+    val = val.trim();
+    if (label === 'attendance') {
+      const m = val.match(/(\d+)\s*\/\s*(\d+)/);
+      if (m) { result.attendanceCurrent = Number(m[1]); result.attendanceMax = Number(m[2]); }
+    } else if (label === 'location') {
+      result.location = val;
+    } else if (label === 'service') {
+      result.service = val;
+    } else if (label === 'duration') {
+      result.duration = val;
+    } else if (label === 'resource') {
+      result.resource = val;
+    }
+  });
+  return result;
+}
+
+let shiftIdCounter = 0;
+
+function buildShifts(events) {
+  const shifts = [];
+  const excluded = { blocked: [], emptySlots: [] };
+  events.forEach(e => {
+    if (e.rawTitle.toLowerCase().includes('blocked')) {
+      excluded.blocked.push(e);
+      return;
+    }
+    // Open/unbooked slots show as "PL: Valdecanas" with no client name — not a real lesson.
+    if (e.rawTitle.startsWith('PL') && !e.client) {
+      excluded.emptySlots.push(e);
+      return;
+    }
+
+    const rule = classifyRate(e.title);
+    // Real location from the click-to-fetch detail wins; fall back to the
+    // "- FV"/"- CM" title-suffix guess for group classes if that's absent.
+    const location = e.detailLocation || locationHint(e.title);
+    // Headcount priority: real attendance (from the click-to-fetch detail)
+    // > names actually listed on the booking (semi-privates, co-taught
+    // group classes) > the rule's plain default. This applies whether the
+    // matched rule is hourly or per-person — a class like "Drill & Play"
+    // can match an hourly rate rule but should still show real attendance,
+    // not just fall back to a generic default.
+    const defaultPeople = e.detailAttendance ?? (e.nameCount > 1 ? e.nameCount : (rule.defaultPeople ?? 1));
+
+    shifts.push({
+      id: shiftIdCounter++,
+      date: e.date,
+      type: e.title,
+      client: e.client,
+      time: `${e.start}-${e.end}`,
+      durationHrs: e.durationHrs,
+      rule,                 // snapshot of the matched rate rule at parse time
+      location,             // null = unassigned, needs manual pick
+      numPeople: defaultPeople,
+      attendanceMax: e.detailAttendanceMax ?? null,  // just a helpful hint, not used in pay math
+      manualAmount: null,   // set when the coach overrides the computed amount
+    });
+  });
+  return { shifts, excluded };
+}
+
+function effectiveHourlyRate(rule) {
+  if (rule.mode === 'split') {
+    return (rule.clientRate ?? 0) - (rule.agapeCut ?? 0);
+  }
+  return rule.rate ?? 45;
+}
+
+function amountFor(shift) {
+  if (shift.manualAmount !== null && shift.manualAmount !== undefined) {
+    return Math.round(shift.manualAmount * 100) / 100;
+  }
+  if (shift.rule.type === 'per_person') {
+    const n = shift.numPeople || 0;
+    return Math.round(shift.rule.pricePerPerson * n * (shift.rule.coachShare / 100) * 100) / 100;
+  }
+  return Math.round(effectiveHourlyRate(shift.rule) * shift.durationHrs * 100) / 100;
+}
+
+// Parses a shift's date ("7/8/26") + start time ("8:00AM-9:00AM") into a
+// real, comparable timestamp, so rows always display in chronological
+// order no matter what order they were pasted/added/edited in. Anything
+// that can't be parsed (e.g. a manually-added blank row) sorts to the end
+// rather than breaking the sort.
+function shiftSortKey(s) {
+  const dateMatch = (s.date || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!dateMatch) return Infinity;
+  let [, m, d, y] = dateMatch;
+  y = y.length === 2 ? '20' + y : y;
+  const startTime = (s.time || '').split('-')[0].trim();
+  const timeMatch = startTime.match(/^(\d{1,2}):(\d{2})(AM|PM)$/i);
+  let hours = 0, minutes = 0;
+  if (timeMatch) {
+    hours = parseInt(timeMatch[1], 10) % 12;
+    minutes = parseInt(timeMatch[2], 10);
+    if (timeMatch[3].toUpperCase() === 'PM') hours += 12;
+  }
+  const ts = new Date(Number(y), Number(m) - 1, Number(d), hours, minutes).getTime();
+  return isNaN(ts) ? Infinity : ts;
+}
+
+function computeGroups(shifts) {
+  const sorted = [...shifts].sort((a, b) => shiftSortKey(a) - shiftSortKey(b));
+  const byLocation = {};
+  sorted.forEach(s => {
+    const loc = s.location || 'Unassigned';
+    if (!byLocation[loc]) byLocation[loc] = [];
+    byLocation[loc].push(s);
+  });
+  let grandTotal = 0;
+  Object.values(byLocation).forEach(rows => {
+    rows.forEach(r => { grandTotal += amountFor(r); });
+  });
+  return { byLocation, grandTotal: Math.round(grandTotal * 100) / 100 };
+}
+
+// ---------------------------------------------------------------------
+// UI wiring
+// ---------------------------------------------------------------------
+let lastResult = null; // { shifts, name }
+
+function shiftFingerprint(s) {
+  return [s.date, s.time, s.type, s.client].join('|').toLowerCase();
+}
+
+let pendingShifts = null;
+let pendingSummary = null;
+
+function runParse() {
+  saveSettings();
+  const html = document.getElementById('htmlInput').value.trim();
+  const status = document.getElementById('parseStatus');
+  const confirmBtn = document.getElementById('confirmAddBtn');
+  confirmBtn.style.display = 'none';
+  pendingShifts = null;
+  pendingSummary = null;
+
+  if (!html) { status.textContent = 'Paste some schedule HTML first.'; status.className = ''; return; }
+
+  let events;
+  try {
+    events = parseSchedule(html);
+  } catch (err) {
+    status.textContent = 'Could not parse that — check you copied the right element.';
+    status.className = 'status-warn';
+    return;
+  }
+  if (events.length === 0) {
+    status.textContent = 'No events found. Did you copy the #court_schedule element?';
+    status.className = 'status-warn';
+    return;
+  }
+
+  const { shifts: newShifts, excluded } = buildShifts(events);
+
+  const existingFingerprints = new Set((lastResult ? lastResult.shifts : []).map(shiftFingerprint));
+  let toAdd = [], dupes = 0;
+  newShifts.forEach(s => {
+    const fp = shiftFingerprint(s);
+    if (existingFingerprints.has(fp)) { dupes++; return; }
+    existingFingerprints.add(fp);
+    toAdd.push(s);
+  });
+
+  pendingShifts = toAdd;
+  pendingSummary = { totalFound: events.length, blocked: excluded.blocked.length, emptySlots: excluded.emptySlots.length, dupes, toAdd: toAdd.length };
+
+  const parts = [];
+  parts.push(`Found ${pendingSummary.totalFound} calendar entries.`);
+  parts.push(`${pendingSummary.toAdd} will be added.`);
+  if (pendingSummary.blocked) parts.push(`${pendingSummary.blocked} blocked time (excluded, unpaid).`);
+  if (pendingSummary.emptySlots) parts.push(`${pendingSummary.emptySlots} empty/unbooked slot${pendingSummary.emptySlots === 1 ? '' : 's'} (excluded).`);
+  if (pendingSummary.dupes) parts.push(`${pendingSummary.dupes} already in the sheet (skipped).`);
+
+  const total = pendingSummary.blocked + pendingSummary.emptySlots + pendingSummary.dupes + pendingSummary.toAdd;
+  const looksOff = total !== pendingSummary.totalFound; // sanity check the math itself adds up
+
+  status.innerHTML = parts.join(' ') +
+    (looksOff ? ' <strong>(counts don\'t add up — something\'s odd, double check before adding.)</strong>' : '') +
+    ' Review below, then click "Add to sheet" if this looks right.';
+  status.className = looksOff ? 'status-warn' : 'status-ok';
+
+  if (pendingSummary.toAdd > 0) {
+    confirmBtn.textContent = `Add ${pendingSummary.toAdd} entr${pendingSummary.toAdd === 1 ? 'y' : 'ies'} to sheet`;
+    confirmBtn.style.display = '';
+  }
+}
+
+function confirmAdd() {
+  if (!pendingShifts) return;
+  if (!lastResult) {
+    lastResult = { shifts: [], name: document.getElementById('coachName').value || 'Coach' };
+  }
+  lastResult.shifts.push(...pendingShifts);
+
+  const status = document.getElementById('parseStatus');
+  status.textContent = `Added. Sheet now has ${lastResult.shifts.length} total entries.`;
+  status.className = 'status-ok';
+  document.getElementById('confirmAddBtn').style.display = 'none';
+  document.getElementById('htmlInput').value = '';
+  pendingShifts = null;
+  pendingSummary = null;
+  renderResults();
+}
+
+function clearAll() {
+  try {
+    lastResult = null;
+    pendingShifts = null;
+    pendingSummary = null;
+    const htmlInput = document.getElementById('htmlInput');
+    if (htmlInput) htmlInput.value = '';
+    const status = document.getElementById('parseStatus');
+    if (status) { status.textContent = 'Cleared. Paste a new schedule to start again.'; status.className = ''; }
+    const confirmBtn = document.getElementById('confirmAddBtn');
+    if (confirmBtn) confirmBtn.style.display = 'none';
+    const resultsSection = document.getElementById('resultsSection');
+    if (resultsSection) resultsSection.style.display = 'none';
+    const results = document.getElementById('results');
+    if (results) results.innerHTML = '';
+    const dirtyBanner = document.getElementById('ratesDirtyBanner');
+    if (dirtyBanner) dirtyBanner.style.display = 'none';
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* cosmetic only, ignore */ }
+  } catch (err) {
+    alert('Something went wrong clearing the sheet. Try reloading the page.');
+  }
+}
+
+function setShiftLocation(id, value) {
+  const shift = lastResult.shifts.find(s => s.id === id);
+  if (!shift) return;
+  shift.location = value.trim() || null;
+  renderResults();
+}
+function setShiftPeople(id, value) {
+  const shift = lastResult.shifts.find(s => s.id === id);
+  if (!shift) return;
+  const n = parseInt(value, 10);
+  shift.numPeople = isNaN(n) ? null : n;
+  renderResults();
+}
+function setShiftField(id, field, value) {
+  const shift = lastResult.shifts.find(s => s.id === id);
+  if (!shift) return;
+  shift[field] = value;
+  renderResults();
+}
+function setShiftAmount(id, value) {
+  const shift = lastResult.shifts.find(s => s.id === id);
+  if (!shift) return;
+  const n = parseFloat(value);
+  shift.manualAmount = isNaN(n) ? null : n;
+  renderResults();
+}
+function resetShiftAmount(id) {
+  const shift = lastResult.shifts.find(s => s.id === id);
+  if (!shift) return;
+  shift.manualAmount = null;
+  renderResults();
+}
+function deleteShift(id) {
+  lastResult.shifts = lastResult.shifts.filter(s => s.id !== id);
+  renderResults();
+}
+function addManualShift() {
+  lastResult.shifts.push({
+    id: shiftIdCounter++,
+    date: '',
+    type: '',
+    client: '',
+    time: '',
+    durationHrs: 0,
+    rule: { match: '', type: 'hourly', mode: 'flat', rate: 45 },
+    location: null,
+    numPeople: 1,
+    manualAmount: 0,
+  });
+  renderResults();
+}
+
+function knownLocations() {
+  const set = new Set((lastResult ? lastResult.shifts : []).map(s => s.location).filter(Boolean));
+  set.add('Fountain Valley');
+  set.add('Costa Mesa');
+  return [...set];
+}
+
+function rateLabelFor(rule) {
+  if (rule.type === 'per_person') return `$${rule.pricePerPerson}/person &times; ${rule.coachShare}%`;
+  if (rule.mode === 'split') return `$${rule.clientRate ?? 0}&minus;$${rule.agapeCut ?? 0}/hr`;
+  return `$${rule.rate ?? 45}/hr`;
+}
+function rateLabelPlain(rule) {
+  if (rule.type === 'per_person') return `$${rule.pricePerPerson}/person x ${rule.coachShare}%`;
+  if (rule.mode === 'split') return `$${rule.clientRate ?? 0}-$${rule.agapeCut ?? 0}/hr`;
+  return `$${rule.rate ?? 45}/hr`;
+}
+
+function renderResults() {
+  const { shifts, name } = lastResult;
+  const section = document.getElementById('resultsSection');
+  const el = document.getElementById('results');
+  section.style.display = 'block';
+
+  const { byLocation, grandTotal } = computeGroups(shifts);
+  lastResult.grandTotal = grandTotal;
+
+  const locOrder = Object.keys(byLocation).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    if (a === 'Fountain Valley') return -1;
+    if (b === 'Fountain Valley') return 1;
+    return a.localeCompare(b);
+  });
+
+  let html = `<datalist id="locOptions">${knownLocations().map(l => `<option value="${escapeHtml(l)}">`).join('')}</datalist>`;
+  const unassignedCount = (byLocation['Unassigned'] || []).length;
+
+  if (unassignedCount > 0) {
+    html += `<div class="warn warn-strong">&#9888; <strong>${unassignedCount} entr${unassignedCount === 1 ? 'y needs' : 'ies need'} a location</strong> — pick one per row below in UNASSIGNED.</div>`;
+  }
+
+  locOrder.forEach(loc => {
+    const rows = byLocation[loc];
+    const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
+    html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
+    html += `<table><tr><th>Date</th><th>Type of class</th><th>Time</th><th>Rate</th><th># people</th>${loc === 'Unassigned' ? '<th>Location</th>' : ''}<th class="num">Amount</th><th></th></tr>`;
+    rows.forEach(r => {
+      const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
+      const peopleCell = `<input type="number" min="0" class="cell-input" style="width:50px" value="${r.numPeople ?? ''}" placeholder="#"
+             onchange="setShiftPeople(${r.id}, this.value)">${maxHint}`;
+      const locCell = loc === 'Unassigned'
+        ? `<input list="locOptions" class="cell-input" placeholder="location..."
+             onchange="setShiftLocation(${r.id}, this.value)">`
+        : '';
+      const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
+      html += `<tr>
+        <td><input class="cell-input" style="width:70px" value="${escapeHtml(r.date)}" onchange="setShiftField(${r.id},'date',this.value)"></td>
+        <td><input class="cell-input" style="width:100%;min-width:160px" value="${escapeHtml(r.type)}" onchange="setShiftField(${r.id},'type',this.value)"></td>
+        <td><input class="cell-input" style="width:110px" value="${escapeHtml(r.time)}" onchange="setShiftField(${r.id},'time',this.value)"></td>
+        <td>${rateLabelFor(r.rule)}</td>
+        <td>${peopleCell}</td>
+        ${loc === 'Unassigned' ? `<td>${locCell}</td>` : ''}
+        <td class="num">
+          <input class="cell-input amount-input" style="width:70px;text-align:right;${overridden ? 'color:var(--warn);font-weight:600' : ''}"
+            value="${amountFor(r).toFixed(2)}" onchange="setShiftAmount(${r.id}, this.value)">
+          ${overridden ? `<button class="reset-btn" title="Reset to calculated amount" onclick="resetShiftAmount(${r.id})">&#8635;</button>` : ''}
+        </td>
+        <td><button class="row-del" title="Remove this line" onclick="deleteShift(${r.id})">&times;</button></td>
+      </tr>`;
+    });
+    html += `<tr class="subtotal-row"><td colspan="${loc === 'Unassigned' ? 6 : 5}">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
+    html += `</table>`;
+  });
+
+  html += `<div class="row"><button class="btn secondary" onclick="addManualShift()">+ add line item</button></div>`;
+  html += `<div class="total">TOTAL: $${grandTotal.toFixed(2)}</div>`;
+
+  const compLines = parseBulletLines(state.compNotes);
+  if (compLines.length > 0) {
+    html += `<div class="comp-notes">
+      <div class="comp-notes-title">COMPENSATION</div>
+      <ul>${compLines.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function hasUnassigned() {
+  return lastResult && lastResult.shifts.some(s => !s.location);
+}
+function confirmUnassignedExport() {
+  if (!hasUnassigned()) return true;
+  const n = lastResult.shifts.filter(s => !s.location).length;
+  return confirm(`${n} entr${n === 1 ? 'y is' : 'ies are'} still missing a location. Export anyway?`);
+}
+
+function downloadCsv() {
+  if (!lastResult) return;
+  if (!confirmUnassignedExport()) return;
+  const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
+  let csv = 'Location,Date,Type of Class,Time,Rate,# People,Amount\n';
+  Object.entries(byLocation).forEach(([loc, rows]) => {
+    rows.forEach(r => {
+      csv += `"${loc}","${r.date}","${r.type.replace(/"/g, '""')}","${r.time}","${rateLabelPlain(r.rule)}",${r.numPeople ?? ''},${amountFor(r).toFixed(2)}\n`;
+    });
+  });
+  csv += `,,,,,TOTAL,${grandTotal.toFixed(2)}\n`;
+
+  const compLines = parseBulletLines(state.compNotes);
+  if (compLines.length > 0) {
+    csv += `\nCOMPENSATION\n`;
+    compLines.forEach(line => { csv += `"${line.replace(/"/g, '""')}"\n`; });
+  }
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  triggerDownload(blob, 'commission_sheet.csv');
+}
+
+async function downloadDocx() {
+  if (!lastResult) return;
+  if (typeof docx === 'undefined' || !docx.Document) {
+    alert('The Word file maker didn\'t load. Try reloading the page, or use "Download .csv" for now.');
+    return;
+  }
+  if (!confirmUnassignedExport()) return;
+  const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, ShadingType } = docx;
+  const colWidths = [1300, 3600, 1800, 1500, 1000, 1400];
+
+  const headerRow = new TableRow({
+    children: ['Date', 'Type of Class', 'Time', 'Rate', '# People', 'Amount'].map((label, i) => new TableCell({
+      width: { size: colWidths[i], type: WidthType.DXA },
+      shading: { type: ShadingType.CLEAR, fill: 'D9D9D9' },
+      children: [new Paragraph({ children: [new TextRun({ text: label, bold: true })] })],
+    })),
+  });
+
+  const children = [
+    new Paragraph({ children: [new TextRun({ text: `Name ${lastResult.name}`, bold: true, size: 24 })] }),
+    new Paragraph({ children: [new TextRun({ text: 'COMMISSION SHEET', bold: true, size: 24 })], spacing: { after: 300 } }),
+  ];
+
+  Object.entries(byLocation).forEach(([loc, rows]) => {
+    const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
+    children.push(new Paragraph({ children: [new TextRun({ text: loc.toUpperCase(), bold: true })], spacing: { before: 200, after: 100 } }));
+
+    const dataRows = rows.map(r => {
+      return new TableRow({
+        children: [r.date, r.type, r.time, rateLabelPlain(r.rule), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].map((val, i) => new TableCell({
+          width: { size: colWidths[i], type: WidthType.DXA },
+          children: [new Paragraph({ alignment: i >= 4 ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: String(val) })] })],
+        })),
+      });
+    });
+
+    const subtotalRow = new TableRow({
+      children: [
+        new TableCell({ width: { size: colWidths[0]+colWidths[1]+colWidths[2]+colWidths[3]+colWidths[4], type: WidthType.DXA }, columnSpan: 5,
+          children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Subtotal:', bold: true })] })] }),
+        new TableCell({ width: { size: colWidths[5], type: WidthType.DXA },
+          children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: `$${subtotal.toFixed(2)}`, bold: true })] })] }),
+      ],
+    });
+
+    children.push(new Table({ width: { size: colWidths.reduce((a,b)=>a+b,0), type: WidthType.DXA }, columnWidths: colWidths, rows: [headerRow, ...dataRows, subtotalRow] }));
+    children.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+  });
+
+  children.push(new Paragraph({ children: [new TextRun({ text: `TOTAL: $${grandTotal.toFixed(2)}`, bold: true, size: 28 })], spacing: { before: 200 } }));
+
+  const compLines = parseBulletLines(state.compNotes);
+  if (compLines.length > 0) {
+    children.push(new Paragraph({
+      children: [new TextRun({ text: 'COMPENSATION', bold: true, size: 22 })],
+      spacing: { before: 400, after: 120 },
+      border: { top: { style: 'single', size: 6, color: 'CCCCCC' } },
+    }));
+    compLines.forEach(line => {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: line })],
+        bullet: { level: 0 },
+        spacing: { after: 60 },
+      }));
+    });
+  }
+
+  try {
+    const doc = new Document({ sections: [{ properties: { page: { size: { width: 12240, height: 15840 } } }, children }] });
+    const blob = await Packer.toBlob(doc);
+    triggerDownload(blob, 'commission_sheet.docx');
+  } catch (err) {
+    alert('Something went wrong making the Word file. Try "Download .csv" instead, or reload the page and try again.');
+  }
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

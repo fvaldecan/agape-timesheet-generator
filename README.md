@@ -1,0 +1,143 @@
+# Agape Timesheet Builder
+
+A small web app that turns a Club Automation weekly schedule into a
+formatted, totaled commission sheet — .docx or .csv. Everything runs in
+the browser; no backend, no database, nothing to host besides a static file.
+
+**[Try it live](#)** _(update this link once deployed)_
+
+## How it works
+
+1. Coach opens the app and drags the **CA Schedule** bookmarklet button
+   (right there on the page, step 0) up to their bookmarks bar — one-time
+   setup, no separate file to dig through.
+2. Logs into Club Automation, opens their schedule, clicks the bookmark
+   from their bookmarks bar. It copies the schedule data to their
+   clipboard, alerting them with a count of real bookings vs.
+   blocked/empty slots *before* anything gets pasted anywhere.
+3. Pastes it into this app, hits **Parse**. The app shows its own review
+   summary (found / will-add / blocked / empty / duplicates) — nothing is
+   added to the sheet until you click **Add to sheet**.
+4. If the pay period covers more than one week (common — usually 2), copy
+   the next week from Club Automation and repeat steps 2-3. Duplicate
+   entries (same date, time, and type) are automatically skipped.
+5. Downloads a `.docx` or `.csv` commission sheet once everything's in.
+6. **Clear & start over** wipes everything to begin a fresh pay period.
+
+Nothing is ever sent to a server. The schedule HTML and your rate
+settings all stay in your own browser — there's no client roster stored
+anywhere, so no client names ever touch the code or a server.
+
+## Deploying it
+
+It's a single static file (`index.html`) — any static host works.
+
+**GitHub Pages** (what this repo is set up for):
+1. Push this repo to GitHub.
+2. Repo Settings → Pages → deploy from the `main` branch, root folder.
+3. Your app is live at `https://<username>.github.io/<repo>/`.
+
+## Before you make the repo public — read this
+
+### The "password" is not real security
+
+`ACCESS_CODE` in `index.html` is checked entirely in the browser. In a
+**public** repo, anyone can open the source file and read the code in
+plain text — the gate only stops someone from casually stumbling onto the
+page, not someone who looks at the code for ten seconds. Don't rely on it
+to keep out anyone who might actually want in.
+
+Because this app doesn't hold any secrets or private data of its own
+(everything sensitive stays local to each coach's browser), the actual
+stakes of someone bypassing the code are low — worst case, a stranger sees
+a form for building a commission sheet with no data in it. If that's an
+acceptable risk for you, the built-in gate is a reasonable "keep it out of
+search engines and casual link-sharing" measure and nothing more.
+
+If you want something that's actually access-controlled, here are real
+options, roughly cheapest/easiest first:
+
+- **Cloudflare Pages + Cloudflare Access** — deploy the static site to
+  Cloudflare Pages, then put it behind Cloudflare Access with an email
+  allow-list (only these specific Agape email addresses can load the
+  page). Free for small teams, and the access control happens on
+  Cloudflare's side, not in your JS.
+- **Netlify password protection** — Netlify has a built-in site-wide
+  password feature, but it's a paid-tier feature.
+- **Private repo + private hosting** — keep the repo itself private (not
+  ideal if you want it as a public portfolio piece), and share the
+  deployed link only with coworkers.
+
+A reasonable middle ground: keep the **code** public on your portfolio
+(it's a legitimate, well-built project to show off), but deploy the
+**actual working version your coworkers use** somewhere gated properly,
+like Cloudflare Access. Two deployments, one repo.
+
+### Rate/comp structure
+
+Each rate rule matches on title text (Starts with / Contains, your
+choice) and is either **Hourly** or **Per-person split**. Hourly rules
+have two pricing modes: a flat `$/hr` amount, or `client rate − Agape's
+cut` (e.g. billed at $65/hr, Agape takes $20, you get $45/hr) — useful
+since the cut varies by coach. Every hourly rule also has a default "#
+people," mainly for flagging semi-private lessons. `index.html` ships
+with Agape's default rate rules pre-filled as a starting point, editable
+per-user in Settings. If you'd rather not have comp structure visible in
+a public repo, blank those out in the source before publishing and let
+each coach fill in their own from the Settings panel the first time they
+use it.
+
+## Files
+
+- `index.html` — the whole app (parsing, calculation, export, everything)
+- `BOOKMARKLET.md` — the schedule-copy bookmarklet, code + install steps
+- `README.md` — this file
+
+## Known limitations
+
+- **One week per capture, always** — but the app now handles this. Club
+  Automation's schedule report is hardcoded to a 7-day range (`date` to
+  `date_end`, always 6 days apart in the page's own form fields), so a
+  2+ week pay period always needs multiple captures. Parsing is additive
+  (see "How it works" above) with automatic duplicate detection, so just
+  paste each week in turn.
+- **Location and attendance aren't in the schedule page HTML — they load
+  on click.** Confirmed: clicking an event fires an AJAX call that returns
+  a popup with Location, Service, and Attendance (`current / max`). The
+  parser for that response (`parseEventInfoHtml`) is already written and
+  tested in `index.html`, but it isn't wired up to an automatic fetch loop
+  yet — that needs the actual request URL, method, and params (DevTools →
+  Network tab → click an event → find the request under `/resource/...`
+  → Copy as cURL). Once that's confirmed, this becomes a real automation:
+  fetch every event's detail on parse and skip manual location entry
+  entirely.
+- **Open/unbooked slots are filtered out automatically.** Club Automation
+  shows unfilled "PL: Valdecanas" slots with no client name — those aren't
+  real lessons and are excluded during parsing. If a real booking is ever
+  missing a client name for some other reason, it'll silently disappear
+  too — spot check the total against what you expect.
+- **No location roster.** Every private lesson lands in an **Unassigned**
+  section until you pick a location for it that week — nothing is
+  remembered client-to-client, since the same client can attend either
+  location. A prominent warning shows above the results whenever anything
+  is unassigned, and exporting with unassigned entries asks for
+  confirmation first. Group class titles ending in "- FV" / "- CM" still
+  get their location guessed from that suffix, still editable if wrong.
+- **Group class headcount isn't in the calendar data**, so it can't be
+  auto-detected. Any rate rule set to "Per-person split" shows an editable
+  headcount field per session. Hourly rules also show an editable "#
+  people" field (defaulted from the rule, usually 1) — purely
+  informational for hourly pricing, but useful for flagging semi-private
+  lessons (e.g. two students in one booking).
+- **Everything in the results table is manually editable** — date, type,
+  time, and amount can all be typed over directly, and any row can be
+  deleted (e.g. a cancelled lesson) or added (e.g. something missing from
+  the calendar). An edited amount shows in orange with a reset (↺) button
+  to snap back to the calculated value.
+- **Cancelled lessons still show up on the calendar.** The schedule HTML
+  doesn't distinguish a cancelled booking from one that happened — delete
+  the row manually if that's the case.
+- **One-off event durations don't always match actual pay.** Scheduled
+  duration on the calendar and what actually got paid have differed by a
+  few minutes/dollars in practice. Spot check one-off events, or just
+  override the amount directly in the table.
