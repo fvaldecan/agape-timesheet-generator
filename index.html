@@ -653,7 +653,10 @@ function classifyRate(title) {
       : title.toLowerCase().includes(r.match.toLowerCase());
     if (matches) return r;
   }
-  return { match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', rate: 45, defaultPeople: 1 }; // default
+  // Nothing configured matches this title — pay $0 rather than guessing a
+  // plausible-looking number, so an unclassified booking is obviously wrong
+  // and gets a rate rule added for it, instead of silently landing at $45.
+  return { match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', rate: 0, defaultPeople: 1 };
 }
 // Group class titles sometimes end with "- FV" / "- CM"; use that as a hint only.
 function locationHint(title) {
@@ -743,7 +746,7 @@ function effectiveHourlyRate(rule) {
   if (rule.mode === 'split') {
     return (rule.clientRate ?? 0) - (rule.agapeCut ?? 0);
   }
-  return rule.rate ?? 45;
+  return rule.rate ?? 0;
 }
 
 function amountFor(shift) {
@@ -752,7 +755,9 @@ function amountFor(shift) {
   }
   if (shift.rule.type === 'per_person') {
     const n = shift.numPeople || 0;
-    return Math.round(shift.rule.pricePerPerson * n * (shift.rule.coachShare / 100) * 100) / 100;
+    const price = Number(shift.rule.pricePerPerson ?? 0);
+    const share = (shift.rule.coachShare ?? 0) / 100;
+    return Math.round(price * n * share * 100) / 100;
   }
   return Math.round(effectiveHourlyRate(shift.rule) * shift.durationHrs * 100) / 100;
 }
@@ -950,7 +955,7 @@ function addManualShift() {
     client: '',
     time: '',
     durationHrs: 0,
-    rule: { match: '', type: 'hourly', mode: 'flat', rate: 45 },
+    rule: { match: '', type: 'hourly', mode: 'flat', rate: 0 },
     location: null,
     numPeople: 1,
     manualAmount: 0,
@@ -966,14 +971,14 @@ function knownLocations() {
 }
 
 function rateLabelFor(rule) {
-  if (rule.type === 'per_person') return `$${rule.pricePerPerson}/person &times; ${rule.coachShare}%`;
+  if (rule.type === 'per_person') return `$${rule.pricePerPerson ?? 0}/person &times; ${rule.coachShare ?? 0}%`;
   if (rule.mode === 'split') return `$${rule.clientRate ?? 0}&minus;$${rule.agapeCut ?? 0}/hr`;
-  return `$${rule.rate ?? 45}/hr`;
+  return `$${rule.rate ?? 0}/hr`;
 }
 function rateLabelPlain(rule) {
-  if (rule.type === 'per_person') return `$${rule.pricePerPerson}/person x ${rule.coachShare}%`;
+  if (rule.type === 'per_person') return `$${rule.pricePerPerson ?? 0}/person x ${rule.coachShare ?? 0}%`;
   if (rule.mode === 'split') return `$${rule.clientRate ?? 0}-$${rule.agapeCut ?? 0}/hr`;
-  return `$${rule.rate ?? 45}/hr`;
+  return `$${rule.rate ?? 0}/hr`;
 }
 
 function renderResults() {
