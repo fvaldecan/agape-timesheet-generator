@@ -136,6 +136,8 @@
   .rate-row.drag-over { border-top: 2px solid var(--brand-purple); }
   .rate-drag-handle { cursor: grab; color: #8a8f86; font-size: 15px; padding: 0 4px; user-select: none; }
   .rate-drag-handle:active { cursor: grabbing; }
+  .rate-row.rate-row-incomplete { border-left: 3px solid var(--warn); }
+  .rate-row input.field-missing { border-color: var(--warn); background: var(--warn-dim); }
   .rate-row input, .rate-row select {
     padding: 7px 9px;
     border: 1px solid var(--line);
@@ -425,8 +427,11 @@ function renderRates() {
   let dragSrcIndex = null;
 
   state.rates.forEach((r, i) => {
+    const missing = rateRuleMissingFields(r);
+    const missCls = field => missing.includes(field) ? ' field-missing' : '';
+
     const row = document.createElement('div');
-    row.className = 'rate-row';
+    row.className = 'rate-row' + (missing.length ? ' rate-row-incomplete' : '');
     row.draggable = true;
 
     // A row must be draggable as a whole (that's what makes the drag
@@ -462,11 +467,11 @@ function renderRates() {
     let typeFields;
     if (r.type === 'per_person') {
       typeFields = `
-        <span class="affix">$<input value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person"
+        <span class="affix">$<input class="${missCls('pricePerPerson')}" value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person"
           onchange="state.rates[${i}].pricePerPerson=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">per person</span>
         <span class="rate-x">&times;</span>
-        <span class="affix"><input value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach"
+        <span class="affix"><input class="${missCls('coachShare')}" value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach"
           onchange="state.rates[${i}].coachShare=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();">%</span>
         <span class="rate-suffix">to coach</span>
       `;
@@ -479,10 +484,10 @@ function renderRates() {
           <option value="flat">Flat $/hr</option>
           <option value="split" selected>Client rate − Agape cut</option>
         </select>
-        <span class="affix">$<input value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour"
+        <span class="affix">$<input class="${missCls('clientRate')}" value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour"
           onchange="state.rates[${i}].clientRate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-x">&minus;</span>
-        <span class="affix">$<input value="${agapeCut ?? ''}" type="number" step="0.01" title="What Agape keeps per hour"
+        <span class="affix">$<input class="${missCls('agapeCut')}" value="${agapeCut ?? ''}" type="number" step="0.01" title="What Agape keeps per hour"
           onchange="state.rates[${i}].agapeCut=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">= $${net.toFixed(2)}/hr to you</span>
         <span class="rate-x">&middot;</span>
@@ -496,7 +501,7 @@ function renderRates() {
           <option value="flat" selected>Flat $/hr</option>
           <option value="split">Client rate − Agape cut</option>
         </select>
-        <span class="affix">$<input value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour"
+        <span class="affix">$<input class="${missCls('rate')}" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour"
           onchange="state.rates[${i}].rate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">/hr to you</span>
         <span class="rate-x">&middot;</span>
@@ -508,7 +513,7 @@ function renderRates() {
 
     row.innerHTML = `
       <span class="rate-drag-handle" title="Drag to reorder — first match wins">&#10495;</span>
-      <input class="rate-match" value="${escapeHtml(r.match)}" placeholder="Title text..."
+      <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="Title text..."
         onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
       <select class="rate-matchmode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();markRatesDirty();">
         <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>Starts with</option>
@@ -547,6 +552,46 @@ function setRateMode(i, value) {
   renderRates();
   saveSettings();
   markRatesDirty();
+}
+
+// Returns the field *keys* (not labels) still blank on a rate row — used
+// both to build the Parse-time error message and to highlight the exact
+// empty input boxes in the editor. Every row in the list is required,
+// including a freshly-added blank one: "+ add a rate" is a promise to
+// finish it, not a free pass to leave it half-done.
+const RATE_FIELD_LABELS = {
+  match: 'match text',
+  rate: 'hourly rate',
+  clientRate: 'client rate',
+  agapeCut: 'Agape cut',
+  pricePerPerson: 'price per person',
+  coachShare: 'coach share %',
+};
+function rateRuleMissingFields(r) {
+  const blank = v => v === undefined || v === null || v === '' || (typeof v === 'number' && isNaN(v));
+  const missing = [];
+  if (blank(r.match)) missing.push('match');
+  if (r.type === 'per_person') {
+    if (blank(r.pricePerPerson)) missing.push('pricePerPerson');
+    if (blank(r.coachShare)) missing.push('coachShare');
+  } else if (r.mode === 'split') {
+    if (blank(r.clientRate)) missing.push('clientRate');
+    if (blank(r.agapeCut)) missing.push('agapeCut');
+  } else {
+    if (blank(r.rate)) missing.push('rate');
+  }
+  return missing;
+}
+function validateRates() {
+  const problems = [];
+  state.rates.forEach((r, i) => {
+    const missing = rateRuleMissingFields(r);
+    if (missing.length) {
+      const label = r.match ? `"${r.match}"` : '(no match text yet)';
+      problems.push(`Rate row ${i + 1} ${label}: missing ${missing.map(f => RATE_FIELD_LABELS[f]).join(', ')}.`);
+    }
+  });
+  return problems;
 }
 
 // ---------------------------------------------------------------------
@@ -881,6 +926,16 @@ function runParse() {
   confirmBtn.style.display = 'none';
   pendingShifts = null;
   pendingSummary = null;
+
+  // A rule with a blank pay field would silently compute $0 for anything
+  // that matches it — block parsing entirely instead, so a half-filled-in
+  // rate can't quietly ship on a real commission sheet.
+  const rateProblems = validateRates();
+  if (rateProblems.length) {
+    status.innerHTML = '<strong>Fix your pay rates before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+    status.className = 'status-warn';
+    return;
+  }
 
   if (!html) { status.textContent = 'Paste some schedule HTML first.'; status.className = ''; return; }
 
