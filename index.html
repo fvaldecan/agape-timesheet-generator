@@ -411,6 +411,10 @@ let state = loadSettings();
 document.getElementById('coachName').value = state.name;
 document.getElementById('compNotes').value = state.compNotes || '';
 
+// Fields left blank by the user must render as blank, not as a made-up
+// number — a $45/hr shown before anyone typed it looks like a real,
+// confirmed rate. "??" only falls through on null/undefined, so an
+// explicit 0 the user typed still displays as 0.
 function renderRates() {
   const el = document.getElementById('rateRows');
   el.innerHTML = '';
@@ -421,28 +425,29 @@ function renderRates() {
     let typeFields;
     if (r.type === 'per_person') {
       typeFields = `
-        <span class="affix">$<input value="${r.pricePerPerson ?? 20}" type="number" step="0.01" title="Price charged per person"
-          onchange="state.rates[${i}].pricePerPerson=Number(this.value);saveSettings();markRatesDirty();"></span>
+        <span class="affix">$<input value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person"
+          onchange="state.rates[${i}].pricePerPerson=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">per person</span>
         <span class="rate-x">&times;</span>
-        <span class="affix"><input value="${r.coachShare ?? 50}" type="number" title="Percent of that price that goes to the coach"
-          onchange="state.rates[${i}].coachShare=Number(this.value);saveSettings();markRatesDirty();">%</span>
+        <span class="affix"><input value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach"
+          onchange="state.rates[${i}].coachShare=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();">%</span>
         <span class="rate-suffix">to coach</span>
       `;
     } else if (r.mode === 'split') {
-      const clientRate = r.clientRate ?? 65;
-      const agapeCut = r.agapeCut ?? 20;
+      const clientRate = r.clientRate;
+      const agapeCut = r.agapeCut;
+      const net = (clientRate ?? 0) - (agapeCut ?? 0);
       typeFields = `
-        <select class="rate-mode" onchange="state.rates[${i}].mode=this.value;renderRates();saveSettings();markRatesDirty();">
+        <select class="rate-mode" onchange="setRateMode(${i}, this.value)">
           <option value="flat">Flat $/hr</option>
           <option value="split" selected>Client rate − Agape cut</option>
         </select>
-        <span class="affix">$<input value="${clientRate}" type="number" step="0.01" title="What the client is billed per hour"
-          onchange="state.rates[${i}].clientRate=Number(this.value);saveSettings();markRatesDirty();"></span>
+        <span class="affix">$<input value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour"
+          onchange="state.rates[${i}].clientRate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-x">&minus;</span>
-        <span class="affix">$<input value="${agapeCut}" type="number" step="0.01" title="What Agape keeps per hour"
-          onchange="state.rates[${i}].agapeCut=Number(this.value);saveSettings();markRatesDirty();"></span>
-        <span class="rate-suffix">= $${(clientRate - agapeCut).toFixed(2)}/hr to you</span>
+        <span class="affix">$<input value="${agapeCut ?? ''}" type="number" step="0.01" title="What Agape keeps per hour"
+          onchange="state.rates[${i}].agapeCut=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
+        <span class="rate-suffix">= $${net.toFixed(2)}/hr to you</span>
         <span class="rate-x">&middot;</span>
         <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type"
           onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();markRatesDirty();">
@@ -450,12 +455,12 @@ function renderRates() {
       `;
     } else {
       typeFields = `
-        <select class="rate-mode" onchange="state.rates[${i}].mode=this.value;renderRates();saveSettings();markRatesDirty();">
+        <select class="rate-mode" onchange="setRateMode(${i}, this.value)">
           <option value="flat" selected>Flat $/hr</option>
           <option value="split">Client rate − Agape cut</option>
         </select>
-        <span class="affix">$<input value="${r.rate ?? 45}" type="number" step="0.01" title="Pay per hour"
-          onchange="state.rates[${i}].rate=Number(this.value);saveSettings();markRatesDirty();"></span>
+        <span class="affix">$<input value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour"
+          onchange="state.rates[${i}].rate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">/hr to you</span>
         <span class="rate-x">&middot;</span>
         <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type"
@@ -466,12 +471,12 @@ function renderRates() {
 
     row.innerHTML = `
       <input class="rate-match" value="${escapeHtml(r.match)}" placeholder="Title text..."
-        onchange="state.rates[${i}].match=this.value;saveSettings();markRatesDirty();">
+        onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
       <select class="rate-matchmode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();markRatesDirty();">
         <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>Starts with</option>
         <option value="contains" ${r.matchMode !== 'startsWith' ? 'selected' : ''}>Contains</option>
       </select>
-      <select class="rate-type" onchange="state.rates[${i}].type=this.value;renderRates();saveSettings();markRatesDirty();">
+      <select class="rate-type" onchange="setRateType(${i}, this.value)">
         <option value="hourly" ${r.type !== 'per_person' ? 'selected' : ''}>Hourly</option>
         <option value="per_person" ${r.type === 'per_person' ? 'selected' : ''}>Per-person split</option>
       </select>
@@ -482,8 +487,25 @@ function renderRates() {
   });
 }
 function addRateRow() {
-  state.rates.push({ match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', rate: 45, defaultPeople: 1 });
+  state.rates.push({ match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', defaultPeople: 1 });
   renderRates();
+  markRatesDirty();
+}
+
+// Switching type/mode only ever changes that one field — it never invents
+// a pay number for the fields that type/mode needs. Leaving them blank is
+// intentional: it surfaces as an obviously-empty box rather than a
+// plausible-looking guessed rate.
+function setRateType(i, value) {
+  state.rates[i].type = value;
+  renderRates();
+  saveSettings();
+  markRatesDirty();
+}
+function setRateMode(i, value) {
+  state.rates[i].mode = value;
+  renderRates();
+  saveSettings();
   markRatesDirty();
 }
 
