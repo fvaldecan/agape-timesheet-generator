@@ -102,9 +102,9 @@
     resize: vertical;
   }
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
-  #parseStatus { line-height: 1.5; }
-  #parseStatus.status-ok { color: var(--brand-purple); }
-  #parseStatus.status-warn { color: var(--warn); font-weight: 600; }
+  #parseStatus, #updateTimesheetStatus { line-height: 1.5; }
+  #parseStatus.status-ok, #updateTimesheetStatus.status-ok { color: var(--brand-purple); }
+  #parseStatus.status-warn, #updateTimesheetStatus.status-warn { color: var(--warn); font-weight: 600; }
   details { margin-top: 16px; }
   summary {
     cursor: pointer;
@@ -336,6 +336,7 @@
       <div id="ratesDirtyBanner">
         <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
         <button class="btn" style="padding:6px 12px;font-size:12px" onclick="reapplyRatesToSheet()">Update timesheet</button>
+        <div id="updateTimesheetStatus" class="row" style="font-family:var(--mono);font-size:12px;color:#5a5f57"></div>
       </div>
     </details>
 
@@ -594,6 +595,31 @@ function validateRates() {
   return problems;
 }
 
+// Re-checks rate validity only for status elements *currently* showing a
+// rate-validation error (dataset.rateError === '1') — never touches a status
+// area showing an unrelated message (a parse summary, "paste some HTML
+// first", etc.), so editing a rate can't clobber unrelated feedback. This is
+// what makes the status text live, matching the field-level highlighting
+// that already recomputes on every edit.
+function refreshRateStatusOnEdit() {
+  [
+    ['parseStatus', 'parsing'],
+    ['updateTimesheetStatus', 'updating'],
+  ].forEach(([id, verb]) => {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.rateError !== '1') return;
+    const rateProblems = validateRates();
+    if (rateProblems.length) {
+      el.innerHTML = `<strong>Fix your pay rates before ${verb}:</strong><br>` + rateProblems.map(escapeHtml).join('<br>');
+      el.className = 'status-warn';
+    } else {
+      el.textContent = 'Pay rates look good now.';
+      el.className = 'status-ok';
+      el.dataset.rateError = '';
+    }
+  });
+}
+
 // ---------------------------------------------------------------------
 // Rate-rule changes don't retroactively touch shifts already on the
 // sheet (each one keeps a snapshot of the rule that matched it at parse
@@ -602,15 +628,27 @@ function validateRates() {
 // ---------------------------------------------------------------------
 function markRatesDirty() {
   const banner = document.getElementById('ratesDirtyBanner');
-  if (!banner) return;
-  banner.style.display = lastResult && lastResult.shifts.length > 0 ? 'flex' : 'none';
+  if (banner) banner.style.display = lastResult && lastResult.shifts.length > 0 ? 'flex' : 'none';
+  refreshRateStatusOnEdit();
 }
 function reapplyRatesToSheet() {
+  const updateTimesheetStatus = document.getElementById('updateTimesheetStatus');
+  updateTimesheetStatus.dataset.rateError = '';
+  const rateProblems = validateRates();
+  if (rateProblems.length) {
+    updateTimesheetStatus.innerHTML = '<strong>Fix your pay rates before updating:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+    updateTimesheetStatus.className = 'status-warn';
+    updateTimesheetStatus.dataset.rateError = '1';
+    return;
+  }
+
   if (!lastResult) return;
   lastResult.shifts.forEach(s => {
     s.rule = classifyRate(s.type);
   });
   renderResults();
+  updateTimesheetStatus.textContent = 'Timesheet updated.';
+  updateTimesheetStatus.className = 'status-ok';
   const banner = document.getElementById('ratesDirtyBanner');
   if (banner) banner.style.display = 'none';
 }
@@ -922,6 +960,7 @@ function runParse() {
   saveSettings();
   const html = document.getElementById('htmlInput').value.trim();
   const status = document.getElementById('parseStatus');
+  status.dataset.rateError = '';
   const confirmBtn = document.getElementById('confirmAddBtn');
   confirmBtn.style.display = 'none';
   pendingShifts = null;
@@ -934,6 +973,7 @@ function runParse() {
   if (rateProblems.length) {
     status.innerHTML = '<strong>Fix your pay rates before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
     status.className = 'status-warn';
+    status.dataset.rateError = '1';
     return;
   }
 
@@ -998,6 +1038,7 @@ function confirmAdd() {
   const status = document.getElementById('parseStatus');
   status.textContent = `Added. Sheet now has ${lastResult.shifts.length} total entries.`;
   status.className = 'status-ok';
+  status.dataset.rateError = '';
   document.getElementById('confirmAddBtn').style.display = 'none';
   document.getElementById('htmlInput').value = '';
   pendingShifts = null;
@@ -1013,7 +1054,9 @@ function clearAll() {
     const htmlInput = document.getElementById('htmlInput');
     if (htmlInput) htmlInput.value = '';
     const status = document.getElementById('parseStatus');
-    if (status) { status.textContent = 'Cleared. Paste a new schedule to start again.'; status.className = ''; }
+    if (status) { status.textContent = 'Cleared. Paste a new schedule to start again.'; status.className = ''; status.dataset.rateError = ''; }
+    const updateTimesheetStatus = document.getElementById('updateTimesheetStatus');
+    if (updateTimesheetStatus) { updateTimesheetStatus.textContent = ''; updateTimesheetStatus.className = ''; updateTimesheetStatus.dataset.rateError = ''; }
     const confirmBtn = document.getElementById('confirmAddBtn');
     if (confirmBtn) confirmBtn.style.display = 'none';
     const resultsSection = document.getElementById('resultsSection');
