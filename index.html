@@ -256,7 +256,7 @@
 <div id="app" class="wrap" style="display:none">
   <header>
     <h1>Agape Timesheet Builder</h1>
-    <div class="sub">turn your schedule into a commission sheet</div>
+    <div class="sub">turn your schedule into a timesheet</div>
   </header>
 
   <section>
@@ -333,7 +333,7 @@
       </p>
       <div id="ratesDirtyBanner">
         <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
-        <button class="btn" style="padding:6px 12px;font-size:12px" onclick="reapplyRatesToSheet()">Update commission sheet</button>
+        <button class="btn" style="padding:6px 12px;font-size:12px" onclick="reapplyRatesToSheet()">Update timesheet</button>
       </div>
     </details>
 
@@ -352,7 +352,7 @@ $40/hr on programmed groups, drills, classes"
   </section>
 
   <section id="resultsSection" style="display:none">
-    <h2>4. Commission sheet</h2>
+    <h2>4. Timesheet</h2>
     <div id="results"></div>
     <div class="actions">
       <button class="btn" onclick="downloadDocx()">Download .docx</button>
@@ -1142,7 +1142,7 @@ function downloadCsv() {
   }
 
   const blob = new Blob([csv], { type: 'text/csv' });
-  triggerDownload(blob, 'commission_sheet.csv');
+  triggerDownload(blob, 'timesheet.csv');
 }
 
 async function downloadDocx() {
@@ -1166,7 +1166,7 @@ async function downloadDocx() {
 
   const children = [
     new Paragraph({ children: [new TextRun({ text: `Name ${lastResult.name}`, bold: true, size: 24 })] }),
-    new Paragraph({ children: [new TextRun({ text: 'COMMISSION SHEET', bold: true, size: 24 })], spacing: { after: 300 } }),
+    new Paragraph({ children: [new TextRun({ text: 'TIMESHEET', bold: true, size: 24 })], spacing: { after: 300 } }),
   ];
 
   Object.entries(byLocation).forEach(([loc, rows]) => {
