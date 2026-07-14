@@ -799,7 +799,7 @@ function classifyRate(title) {
     const mode = r.matchMode || 'contains';
     const matches = mode === 'startsWith'
       ? title.toUpperCase().startsWith(r.match.trim().toUpperCase())
-      : title.toLowerCase().includes(r.match.toLowerCase());
+      : title.toLowerCase().includes(r.match.trim().toLowerCase());
     if (matches) return r;
   }
   // Nothing configured matches this title — pay $0 rather than guessing a
