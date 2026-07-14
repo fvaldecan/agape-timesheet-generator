@@ -1092,6 +1092,10 @@ function setShiftField(id, field, value) {
   const shift = lastResult.shifts.find(s => s.id === id);
   if (!shift) return;
   shift[field] = value;
+  if (field === 'type') {
+    shift.rule = classifyRate(value);
+    shift.numPeople = shift.rule.defaultPeople ?? 1;
+  }
   renderResults();
 }
 function setShiftAmount(id, value) {
