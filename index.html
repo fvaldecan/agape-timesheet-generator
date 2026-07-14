@@ -585,6 +585,10 @@ function rateRuleMissingFields(r) {
 }
 function validateRates() {
   const problems = [];
+  if (state.rates.length === 0) {
+    problems.push('No pay rate rules configured — every booking would compute as $0. Add at least one rate below.');
+    return problems;
+  }
   state.rates.forEach((r, i) => {
     const missing = rateRuleMissingFields(r);
     if (missing.length) {
