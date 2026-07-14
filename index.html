@@ -493,7 +493,7 @@ function renderRates() {
         <span class="rate-suffix">= $${net.toFixed(2)}/hr to you</span>
         <span class="rate-x">&middot;</span>
         <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type"
-          onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();markRatesDirty();">
+          onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();renderRates();markRatesDirty();">
         <span class="rate-suffix">people</span>
       `;
     } else {
@@ -507,7 +507,7 @@ function renderRates() {
         <span class="rate-suffix">/hr to you</span>
         <span class="rate-x">&middot;</span>
         <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type"
-          onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();markRatesDirty();">
+          onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();renderRates();markRatesDirty();">
         <span class="rate-suffix">people</span>
       `;
     }
@@ -516,7 +516,7 @@ function renderRates() {
       <span class="rate-drag-handle" title="Drag to reorder — first match wins">&#10495;</span>
       <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="Title text..."
         onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
-      <select class="rate-matchmode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();markRatesDirty();">
+      <select class="rate-matchmode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();renderRates();markRatesDirty();">
         <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>Starts with</option>
         <option value="contains" ${r.matchMode !== 'startsWith' ? 'selected' : ''}>Contains</option>
       </select>
