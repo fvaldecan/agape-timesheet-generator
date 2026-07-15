@@ -250,8 +250,9 @@
 
 <div id="gate" class="gate">
   <h2>Agape Timesheet Builder</h2>
-  <input id="pw" type="password" placeholder="Access code">
-  <div class="err" id="pwErr">Wrong code — check with whoever shared this link.</div>
+  <label for="pw" style="display:block;font-size:13px;margin-bottom:6px">Access code</label>
+  <input id="pw" type="password" placeholder="Access code" aria-describedby="pwErr">
+  <div class="err" id="pwErr" role="alert">Wrong code — check with whoever shared this link.</div>
   <button onclick="checkPassword()">Enter</button>
 </div>
 
@@ -286,10 +287,11 @@
           <li>For the web address / URL, copy everything in the box below and paste it in.</li>
           <li>Save.</li>
         </ol>
+        <label for="bookmarkletCode" style="display:block;font-size:12px;margin-top:8px">Bookmark URL (read-only, click to select)</label>
         <textarea id="bookmarkletCode" readonly onclick="this.select()"
-          style="width:100%;min-height:70px;font-family:var(--mono);font-size:11px;padding:8px;border:1px solid var(--line);background:#fcfbf8;margin-top:8px"></textarea>
+          style="width:100%;min-height:70px;font-family:var(--mono);font-size:11px;padding:8px;border:1px solid var(--line);background:#fcfbf8;margin-top:4px"></textarea>
         <button class="btn secondary" style="margin-top:8px" onclick="copyBookmarkletCode()">Copy</button>
-        <span id="copyStatus" style="font-size:12px;color:var(--brand-purple);margin-left:8px"></span>
+        <span id="copyStatus" role="status" aria-live="polite" style="font-size:12px;color:var(--brand-purple);margin-left:8px"></span>
       </div>
     </details>
     <p style="font-size:13px;color:#5a5f57;margin-top:14px">
@@ -307,18 +309,19 @@
       (No bookmarklet: right-click the schedule &rarr; Inspect &rarr; find
       <code>&lt;div id="court_schedule"&gt;</code> &rarr; Copy &rarr; Copy outerHTML.)
     </p>
+    <label for="htmlInput" style="display:block;font-size:12px;margin-bottom:4px">Schedule HTML</label>
     <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
     <div class="row">
       <button class="btn" onclick="runParse()">Parse</button>
       <button class="btn" id="confirmAddBtn" style="display:none" onclick="confirmAdd()">Add to sheet</button>
     </div>
-    <div id="parseStatus" class="row" style="font-family:var(--mono);font-size:12px;color:#5a5f57"></div>
+    <div id="parseStatus" class="row" role="status" aria-live="polite" style="font-family:var(--mono);font-size:12px;color:#5a5f57"></div>
   </section>
 
   <section>
     <h2>3. Your settings <span style="text-transform:none;letter-spacing:0">(remembered next time you come back)</span></h2>
     <div class="row">
-      <label style="font-family:var(--mono);font-size:12px">Name on sheet</label>
+      <label for="coachName" style="font-family:var(--mono);font-size:12px">Name on sheet</label>
       <input id="coachName" type="text" style="padding:7px 9px;border:1px solid var(--line);font-family:var(--mono);font-size:12px;min-width:220px">
     </div>
 
@@ -333,10 +336,10 @@
         for group classes paid per attendee — you'll enter the headcount after pasting. "# people"
         is editable on every row (handy for a semi-private with 2 students).
       </p>
-      <div id="ratesDirtyBanner">
+      <div id="ratesDirtyBanner" role="status" aria-live="polite">
         <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
         <button class="btn" style="padding:6px 12px;font-size:12px" onclick="reapplyRatesToSheet()">Update timesheet</button>
-        <div id="updateTimesheetStatus" class="row" style="font-family:var(--mono);font-size:12px;color:#5a5f57"></div>
+        <div id="updateTimesheetStatus" class="row" role="status" aria-live="polite" style="font-family:var(--mono);font-size:12px;color:#5a5f57"></div>
       </div>
     </details>
 
@@ -346,6 +349,7 @@
         Paste your contract's rate bullets here — same list you'd copy from a Word doc or PDF.
         Shows up at the bottom of your sheet, on screen and in the download.
       </p>
+      <label for="compNotes" style="display:block;font-size:12px;margin-bottom:4px">Compensation notes</label>
       <textarea id="compNotes" placeholder="e.g.
 $45/hr on private lessons
 $40/hr on programmed groups, drills, classes"
@@ -465,14 +469,17 @@ function renderRates() {
       markRatesDirty();
     });
 
+    const missAttr = field => missing.includes(field) ? ' aria-invalid="true"' : '';
+    const rowLabel = r.match ? `"${r.match}" rate row` : `rate row ${i + 1}`;
+
     let typeFields;
     if (r.type === 'per_person') {
       typeFields = `
-        <span class="affix">$<input class="${missCls('pricePerPerson')}" value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person"
+        <span class="affix">$<input class="${missCls('pricePerPerson')}" value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person" aria-label="Price charged per person"${missAttr('pricePerPerson')}
           onchange="state.rates[${i}].pricePerPerson=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">per person</span>
         <span class="rate-x">&times;</span>
-        <span class="affix"><input class="${missCls('coachShare')}" value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach"
+        <span class="affix"><input class="${missCls('coachShare')}" value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach" aria-label="Percent of that price that goes to the coach"${missAttr('coachShare')}
           onchange="state.rates[${i}].coachShare=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();">%</span>
         <span class="rate-suffix">to coach</span>
       `;
@@ -481,51 +488,51 @@ function renderRates() {
       const agapeCut = r.agapeCut;
       const net = (clientRate ?? 0) - (agapeCut ?? 0);
       typeFields = `
-        <select class="rate-mode" onchange="setRateMode(${i}, this.value)">
+        <select class="rate-mode" aria-label="Pricing mode" onchange="setRateMode(${i}, this.value)">
           <option value="flat">Flat $/hr</option>
           <option value="split" selected>Client rate − Agape cut</option>
         </select>
-        <span class="affix">$<input class="${missCls('clientRate')}" value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour"
+        <span class="affix">$<input class="${missCls('clientRate')}" value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour" aria-label="What the client is billed per hour"${missAttr('clientRate')}
           onchange="state.rates[${i}].clientRate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-x">&minus;</span>
-        <span class="affix">$<input class="${missCls('agapeCut')}" value="${agapeCut ?? ''}" type="number" step="0.01" title="What Agape keeps per hour"
+        <span class="affix">$<input class="${missCls('agapeCut')}" value="${agapeCut ?? ''}" type="number" step="0.01" title="What Agape keeps per hour" aria-label="What Agape keeps per hour"${missAttr('agapeCut')}
           onchange="state.rates[${i}].agapeCut=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">= $${net.toFixed(2)}/hr to you</span>
         <span class="rate-x">&middot;</span>
-        <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type"
+        <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type" aria-label="Default number of people for this booking type"
           onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();renderRates();markRatesDirty();">
         <span class="rate-suffix">people</span>
       `;
     } else {
       typeFields = `
-        <select class="rate-mode" onchange="setRateMode(${i}, this.value)">
+        <select class="rate-mode" aria-label="Pricing mode" onchange="setRateMode(${i}, this.value)">
           <option value="flat" selected>Flat $/hr</option>
           <option value="split">Client rate − Agape cut</option>
         </select>
-        <span class="affix">$<input class="${missCls('rate')}" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour"
+        <span class="affix">$<input class="${missCls('rate')}" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour" aria-label="Pay per hour"${missAttr('rate')}
           onchange="state.rates[${i}].rate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">/hr to you</span>
         <span class="rate-x">&middot;</span>
-        <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type"
+        <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type" aria-label="Default number of people for this booking type"
           onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();renderRates();markRatesDirty();">
         <span class="rate-suffix">people</span>
       `;
     }
 
     row.innerHTML = `
-      <span class="rate-drag-handle" title="Drag to reorder — first match wins">&#10495;</span>
-      <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="Title text..."
+      <span class="rate-drag-handle" title="Drag to reorder — first match wins" aria-hidden="true">&#10495;</span>
+      <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="Title text..." aria-label="Match text from booking title"${missAttr('match')}
         onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
-      <select class="rate-matchmode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();renderRates();markRatesDirty();">
+      <select class="rate-matchmode" aria-label="Match mode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();renderRates();markRatesDirty();">
         <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>Starts with</option>
         <option value="contains" ${r.matchMode !== 'startsWith' ? 'selected' : ''}>Contains</option>
       </select>
-      <select class="rate-type" onchange="setRateType(${i}, this.value)">
+      <select class="rate-type" aria-label="Rate type" onchange="setRateType(${i}, this.value)">
         <option value="hourly" ${r.type !== 'per_person' ? 'selected' : ''}>Hourly</option>
         <option value="per_person" ${r.type === 'per_person' ? 'selected' : ''}>Per-person split</option>
       </select>
       <span class="rate-fields">${typeFields}</span>
-      <button onclick="state.rates.splice(${i},1);renderRates();saveSettings();markRatesDirty();">remove</button>
+      <button aria-label="Remove ${escapeHtml(rowLabel)}" onclick="state.rates.splice(${i},1);renderRates();saveSettings();markRatesDirty();">remove</button>
     `;
     row.querySelector('.rate-drag-handle').addEventListener('mousedown', () => { allowDrag = true; });
     row.addEventListener('mouseup', () => { allowDrag = false; });
@@ -1166,7 +1173,7 @@ function renderResults() {
   const unassignedCount = (byLocation['Unassigned'] || []).length;
 
   if (unassignedCount > 0) {
-    html += `<div class="warn warn-strong">&#9888; <strong>${unassignedCount} entr${unassignedCount === 1 ? 'y needs' : 'ies need'} a location</strong> — pick one per row below in UNASSIGNED.</div>`;
+    html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unassignedCount} entr${unassignedCount === 1 ? 'y needs' : 'ies need'} a location</strong> — pick one per row below in UNASSIGNED.</div>`;
   }
 
   locOrder.forEach(loc => {
@@ -1176,26 +1183,26 @@ function renderResults() {
     html += `<table><tr><th>Date</th><th>Type of class</th><th>Time</th><th>Rate</th><th># people</th>${loc === 'Unassigned' ? '<th>Location</th>' : ''}<th class="num">Amount</th><th></th></tr>`;
     rows.forEach(r => {
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
-      const peopleCell = `<input type="number" min="0" class="cell-input" style="width:50px" value="${r.numPeople ?? ''}" placeholder="#"
+      const peopleCell = `<input type="number" min="0" class="cell-input" style="width:50px" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${escapeHtml(r.date)}"
              onchange="setShiftPeople(${r.id}, this.value)">${maxHint}`;
       const locCell = loc === 'Unassigned'
-        ? `<input list="locOptions" class="cell-input" placeholder="location..."
+        ? `<input list="locOptions" class="cell-input" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${escapeHtml(r.date)}"
              onchange="setShiftLocation(${r.id}, this.value)">`
         : '';
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
       html += `<tr>
-        <td><input class="cell-input" style="width:70px" value="${escapeHtml(r.date)}" onchange="setShiftField(${r.id},'date',this.value)"></td>
-        <td><input class="cell-input" style="width:100%;min-width:160px" value="${escapeHtml(r.type)}" onchange="setShiftField(${r.id},'type',this.value)"></td>
-        <td><input class="cell-input" style="width:110px" value="${escapeHtml(r.time)}" onchange="setShiftField(${r.id},'time',this.value)"></td>
+        <td><input class="cell-input" style="width:70px" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
+        <td><input class="cell-input" style="width:100%;min-width:160px" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
+        <td><input class="cell-input" style="width:110px" value="${escapeHtml(r.time)}" aria-label="Time" onchange="setShiftField(${r.id},'time',this.value)"></td>
         <td>${rateLabelFor(r.rule)}</td>
         <td>${peopleCell}</td>
         ${loc === 'Unassigned' ? `<td>${locCell}</td>` : ''}
         <td class="num">
           <input class="cell-input amount-input" style="width:70px;text-align:right;${overridden ? 'color:var(--warn);font-weight:600' : ''}"
-            value="${amountFor(r).toFixed(2)}" onchange="setShiftAmount(${r.id}, this.value)">
-          ${overridden ? `<button class="reset-btn" title="Reset to calculated amount" onclick="resetShiftAmount(${r.id})">&#8635;</button>` : ''}
+            value="${amountFor(r).toFixed(2)}" aria-label="Amount${overridden ? ', manually overridden' : ''}" onchange="setShiftAmount(${r.id}, this.value)">
+          ${overridden ? `<button class="reset-btn" title="Reset to calculated amount" aria-label="Reset amount to calculated value" onclick="resetShiftAmount(${r.id})">&#8635;</button>` : ''}
         </td>
-        <td><button class="row-del" title="Remove this line" onclick="deleteShift(${r.id})">&times;</button></td>
+        <td><button class="row-del" title="Remove this line" aria-label="Delete this row (${escapeHtml(r.type) || 'blank'} on ${escapeHtml(r.date) || 'no date'})" onclick="deleteShift(${r.id})">&times;</button></td>
       </tr>`;
     });
     html += `<tr class="subtotal-row"><td colspan="${loc === 'Unassigned' ? 6 : 5}">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
