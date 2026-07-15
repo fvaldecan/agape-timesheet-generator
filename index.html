@@ -137,6 +137,13 @@
   .rate-row.drag-over { border-top: 2px solid var(--brand-purple); }
   .rate-drag-handle { cursor: grab; color: var(--dim); font-size: 15px; padding: 0 4px; user-select: none; }
   .rate-drag-handle:active { cursor: grabbing; }
+  .rate-reorder { display: flex; flex-direction: column; gap: 1px; }
+  .rate-move-btn {
+    background: none; border: 1px solid var(--line); cursor: pointer; color: var(--dim);
+    font-size: 8px; line-height: 1; padding: 2px 4px;
+  }
+  .rate-move-btn:hover:not(:disabled) { color: var(--brand-purple); border-color: var(--brand-purple); }
+  .rate-move-btn:disabled { opacity: 0.3; cursor: default; }
   .rate-row.rate-row-incomplete { border-left: 3px solid var(--warn); }
   .rate-row input.field-missing { border-color: var(--warn); background: var(--warn-dim); }
   .rate-row input.field-missing::placeholder { color: var(--warn); opacity: 1; }
@@ -524,6 +531,10 @@ function renderRates() {
 
     row.innerHTML = `
       <span class="rate-drag-handle" title="Drag to reorder — first match wins" aria-hidden="true">&#10495;</span>
+      <span class="rate-reorder">
+        <button type="button" class="rate-move-btn" aria-label="Move ${escapeHtml(rowLabel)} up" title="Move up" onclick="moveRateRow(${i}, -1)"${i === 0 ? ' disabled' : ''}>&#9650;</button>
+        <button type="button" class="rate-move-btn" aria-label="Move ${escapeHtml(rowLabel)} down" title="Move down" onclick="moveRateRow(${i}, 1)"${i === state.rates.length - 1 ? ' disabled' : ''}>&#9660;</button>
+      </span>
       <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="${missing.includes('match') ? 'Title text... (required)' : 'Title text...'}" aria-label="Match text from booking title"${missAttr('match')}
         onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
       <select class="rate-matchmode" aria-label="Match mode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();renderRates();markRatesDirty();">
@@ -545,6 +556,19 @@ function renderRates() {
 function addRateRow() {
   state.rates.push({ match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', defaultPeople: 1 });
   renderRates();
+  markRatesDirty();
+}
+
+// Keyboard-operable equivalent of the mouse-only drag-to-reorder below —
+// order is meaningful ("first match wins"), so it can't be mouse-only.
+// Swaps two adjacent rows in place; out-of-range moves (top row up,
+// bottom row down) are no-ops rather than errors.
+function moveRateRow(i, direction) {
+  const j = i + direction;
+  if (j < 0 || j >= state.rates.length) return;
+  [state.rates[i], state.rates[j]] = [state.rates[j], state.rates[i]];
+  renderRates();
+  saveSettings();
   markRatesDirty();
 }
 
