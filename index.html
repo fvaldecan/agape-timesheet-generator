@@ -10,12 +10,13 @@
     --ink: #1c2321;
     --paper: #f8f6fb;
     --panel: #ffffff;
-    --line: #ded6ea;
+    --line: #9385aa;
     --brand-purple: #64368a;
     --brand-purple-dim: #ece4f4;
     --brand-lime: #cddb00;
-    --warn: #b5562f;
+    --warn: #a04a26;
     --warn-dim: #f5e4db;
+    --dim: #5a5f57;
     --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
     --serif: "Source Serif 4", Georgia, serif;
   }
@@ -134,10 +135,11 @@
   }
   .rate-row.dragging { opacity: 0.4; }
   .rate-row.drag-over { border-top: 2px solid var(--brand-purple); }
-  .rate-drag-handle { cursor: grab; color: #8a8f86; font-size: 15px; padding: 0 4px; user-select: none; }
+  .rate-drag-handle { cursor: grab; color: var(--dim); font-size: 15px; padding: 0 4px; user-select: none; }
   .rate-drag-handle:active { cursor: grabbing; }
   .rate-row.rate-row-incomplete { border-left: 3px solid var(--warn); }
   .rate-row input.field-missing { border-color: var(--warn); background: var(--warn-dim); }
+  .rate-row input.field-missing::placeholder { color: var(--warn); opacity: 1; }
   .rate-row input, .rate-row select {
     padding: 7px 9px;
     border: 1px solid var(--line);
@@ -148,7 +150,7 @@
   .rate-row .rate-type { flex: 0 0 auto; }
   .rate-row .rate-fields { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; }
   .rate-row .rate-fields input { width: 80px; }
-  .rate-row .rate-x, .rate-row .rate-suffix { font-family: var(--mono); font-size: 11px; color: #8a8f86; white-space: nowrap; }
+  .rate-row .rate-x, .rate-row .rate-suffix { font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; }
   .affix {
     display: inline-flex;
     align-items: center;
@@ -161,7 +163,7 @@
     gap: 2px;
   }
   .affix input { border: none; width: 60px; padding: 6px 2px; font-family: var(--mono); font-size: 12px; }
-  .affix input:focus { outline: none; }
+  .affix input:focus { outline: 2px solid var(--brand-purple); outline-offset: 1px; }
   #ratesDirtyBanner {
     display: none;
     align-items: center;
@@ -182,14 +184,14 @@
     font-size: 12px;
     background: #fffef9;
   }
-  td .dim { color: #b8bcb3; }
+  td .dim { color: var(--dim); }
   .amount-input { display: inline-block; }
   .reset-btn {
     background: none; border: none; cursor: pointer; color: var(--warn);
     font-size: 13px; margin-left: 2px; padding: 0 2px;
   }
   .row-del {
-    background: none; border: none; cursor: pointer; color: #b8bcb3;
+    background: none; border: none; cursor: pointer; color: var(--dim);
     font-size: 15px; padding: 0 4px;
   }
   .row-del:hover { color: var(--warn); }
@@ -241,9 +243,9 @@
     font-family: var(--serif);
     font-size: 14px;
   }
-  .empty { color: #8a8f86; font-size: 14px; font-style: italic; }
+  .empty { color: var(--dim); font-size: 14px; font-style: italic; }
   .actions { margin-top: 20px; display: flex; gap: 10px; }
-  footer { margin-top: 40px; font-size: 12px; color: #8a8f86; font-family: var(--mono); text-align: center; }
+  footer { margin-top: 40px; font-size: 12px; color: var(--dim); font-family: var(--mono); text-align: center; }
 </style>
 </head>
 <body>
@@ -329,7 +331,7 @@
       <summary>Pay rates</summary>
       <div class="config-grid" id="rateRows"></div>
       <button class="btn secondary" style="margin-top:6px" onclick="addRateRow()">+ add a rate</button>
-      <p style="font-size:12px;color:#8a8f86;margin-top:8px">
+      <p style="font-size:12px;color:var(--dim);margin-top:8px">
         Type a word from your booking titles (like "PL" or "Drill"), choose
         <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
         match wins, so put specific rows above general ones. <strong>Per-person split</strong> is
@@ -345,7 +347,7 @@
 
     <details>
       <summary>Compensation summary (optional)</summary>
-      <p style="font-size:12px;color:#8a8f86;margin:8px 0">
+      <p style="font-size:12px;color:var(--dim);margin:8px 0">
         Paste your contract's rate bullets here — same list you'd copy from a Word doc or PDF.
         Shows up at the bottom of your sheet, on screen and in the download.
       </p>
@@ -470,16 +472,17 @@ function renderRates() {
     });
 
     const missAttr = field => missing.includes(field) ? ' aria-invalid="true"' : '';
+    const missPlaceholder = field => missing.includes(field) ? ' placeholder="required"' : '';
     const rowLabel = r.match ? `"${r.match}" rate row` : `rate row ${i + 1}`;
 
     let typeFields;
     if (r.type === 'per_person') {
       typeFields = `
-        <span class="affix">$<input class="${missCls('pricePerPerson')}" value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person" aria-label="Price charged per person"${missAttr('pricePerPerson')}
+        <span class="affix">$<input class="${missCls('pricePerPerson')}" value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person" aria-label="Price charged per person"${missAttr('pricePerPerson')}${missPlaceholder('pricePerPerson')}
           onchange="state.rates[${i}].pricePerPerson=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">per person</span>
         <span class="rate-x">&times;</span>
-        <span class="affix"><input class="${missCls('coachShare')}" value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach" aria-label="Percent of that price that goes to the coach"${missAttr('coachShare')}
+        <span class="affix"><input class="${missCls('coachShare')}" value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach" aria-label="Percent of that price that goes to the coach"${missAttr('coachShare')}${missPlaceholder('coachShare')}
           onchange="state.rates[${i}].coachShare=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();">%</span>
         <span class="rate-suffix">to coach</span>
       `;
@@ -492,10 +495,10 @@ function renderRates() {
           <option value="flat">Flat $/hr</option>
           <option value="split" selected>Client rate − Agape cut</option>
         </select>
-        <span class="affix">$<input class="${missCls('clientRate')}" value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour" aria-label="What the client is billed per hour"${missAttr('clientRate')}
+        <span class="affix">$<input class="${missCls('clientRate')}" value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour" aria-label="What the client is billed per hour"${missAttr('clientRate')}${missPlaceholder('clientRate')}
           onchange="state.rates[${i}].clientRate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-x">&minus;</span>
-        <span class="affix">$<input class="${missCls('agapeCut')}" value="${agapeCut ?? ''}" type="number" step="0.01" title="What Agape keeps per hour" aria-label="What Agape keeps per hour"${missAttr('agapeCut')}
+        <span class="affix">$<input class="${missCls('agapeCut')}" value="${agapeCut ?? ''}" type="number" step="0.01" title="What Agape keeps per hour" aria-label="What Agape keeps per hour"${missAttr('agapeCut')}${missPlaceholder('agapeCut')}
           onchange="state.rates[${i}].agapeCut=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">= $${net.toFixed(2)}/hr to you</span>
         <span class="rate-x">&middot;</span>
@@ -509,7 +512,7 @@ function renderRates() {
           <option value="flat" selected>Flat $/hr</option>
           <option value="split">Client rate − Agape cut</option>
         </select>
-        <span class="affix">$<input class="${missCls('rate')}" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour" aria-label="Pay per hour"${missAttr('rate')}
+        <span class="affix">$<input class="${missCls('rate')}" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour" aria-label="Pay per hour"${missAttr('rate')}${missPlaceholder('rate')}
           onchange="state.rates[${i}].rate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">/hr to you</span>
         <span class="rate-x">&middot;</span>
@@ -521,7 +524,7 @@ function renderRates() {
 
     row.innerHTML = `
       <span class="rate-drag-handle" title="Drag to reorder — first match wins" aria-hidden="true">&#10495;</span>
-      <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="Title text..." aria-label="Match text from booking title"${missAttr('match')}
+      <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="${missing.includes('match') ? 'Title text... (required)' : 'Title text...'}" aria-label="Match text from booking title"${missAttr('match')}
         onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
       <select class="rate-matchmode" aria-label="Match mode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();renderRates();markRatesDirty();">
         <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>Starts with</option>
