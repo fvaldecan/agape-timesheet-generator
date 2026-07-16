@@ -834,7 +834,7 @@ function classifyRate(title) {
     const mode = r.matchMode || 'contains';
     const matches = mode === 'startsWith'
       ? title.toUpperCase().startsWith(r.match.trim().toUpperCase())
-      : title.toLowerCase().includes(r.match.toLowerCase());
+      : title.toLowerCase().includes(r.match.trim().toLowerCase());
     if (matches) return r;
   }
   // Nothing configured matches this title — pay $0 rather than guessing a
@@ -1130,6 +1130,10 @@ function setShiftField(id, field, value) {
   const shift = lastResult.shifts.find(s => s.id === id);
   if (!shift) return;
   shift[field] = value;
+  if (field === 'type') {
+    shift.rule = classifyRate(value);
+    shift.numPeople = shift.rule.defaultPeople ?? 1;
+  }
   renderResults();
 }
 function setShiftAmount(id, value) {
@@ -1160,7 +1164,7 @@ function addManualShift() {
     rule: { match: '', type: 'hourly', mode: 'flat', rate: 0 },
     location: null,
     numPeople: 1,
-    manualAmount: 0,
+    manualAmount: null,
   });
   renderResults();
 }
