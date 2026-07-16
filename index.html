@@ -783,8 +783,7 @@ function parseSchedule(html) {
       if (subtitle) nameCount = brCount + 1; // e.g. "Lock<br>Yasutake" = 2 names
     }
 
-    const fmtTime = d => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(' ', '');
-    const fmtDate = d => `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+    const fmtTime24 = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
     // If the enriched bookmarklet ran, each eventBlock carries a
     // data-detail attribute (URL-encoded event-full-info response HTML)
@@ -803,12 +802,12 @@ function parseSchedule(html) {
       : (title.startsWith('PL') ? `PL: ${subtitle}` : `${title} ${subtitle}`.trim());
 
     events.push({
-      date: fmtDate(start),
+      date: dateStr,                 // already yyyy-mm-dd from the cell id — canonical form, no conversion needed
       rawTitle: title,
       title: displayTitle,
       client: title.startsWith('PL') ? subtitle : '',
-      start: fmtTime(start),
-      end: fmtTime(end),
+      startTime: timeStr,            // already 24hr HH:MM from the cell id
+      endTime: fmtTime24(end),
       durationHrs,
       nameCount,                                    // # of names listed on the booking itself (semi-privates etc.)
       detailLocation: detail ? detail.location : null,
@@ -914,7 +913,8 @@ function buildShifts(events) {
       date: e.date,
       type: e.title,
       client: e.client,
-      time: `${e.start}-${e.end}`,
+      startTime: e.startTime,
+      endTime: e.endTime,
       durationHrs: e.durationHrs,
       rule,                 // snapshot of the matched rate rule at parse time
       location,             // null = unassigned, needs manual pick
@@ -946,25 +946,17 @@ function amountFor(shift) {
   return Math.round(effectiveHourlyRate(shift.rule) * shift.durationHrs * 100) / 100;
 }
 
-// Parses a shift's date ("7/8/26") + start time ("8:00AM-9:00AM") into a
-// real, comparable timestamp, so rows always display in chronological
-// order no matter what order they were pasted/added/edited in. Anything
-// that can't be parsed (e.g. a manually-added blank row) sorts to the end
-// rather than breaking the sort.
+// Turns a shift's date + start time into a real, comparable timestamp, so
+// rows always display in chronological order no matter what order they
+// were pasted/added/edited in. Anything that can't be parsed (e.g. a
+// manually-added blank row) sorts to the end rather than breaking the sort.
+// date/startTime are stored in canonical ISO form (yyyy-mm-dd, 24hr HH:MM —
+// what native <input type="date">/<input type="time"> produce), so this no
+// longer needs to regex-parse a display string like the old "7/8/26" +
+// "8:00AM-9:00AM" format required.
 function shiftSortKey(s) {
-  const dateMatch = (s.date || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (!dateMatch) return Infinity;
-  let [, m, d, y] = dateMatch;
-  y = y.length === 2 ? '20' + y : y;
-  const startTime = (s.time || '').split('-')[0].trim();
-  const timeMatch = startTime.match(/^(\d{1,2}):(\d{2})(AM|PM)$/i);
-  let hours = 0, minutes = 0;
-  if (timeMatch) {
-    hours = parseInt(timeMatch[1], 10) % 12;
-    minutes = parseInt(timeMatch[2], 10);
-    if (timeMatch[3].toUpperCase() === 'PM') hours += 12;
-  }
-  const ts = new Date(Number(y), Number(m) - 1, Number(d), hours, minutes).getTime();
+  if (!s.date) return Infinity;
+  const ts = new Date(`${s.date}T${s.startTime || '00:00'}:00`).getTime();
   return isNaN(ts) ? Infinity : ts;
 }
 
@@ -989,7 +981,7 @@ function computeGroups(shifts) {
 let lastResult = null; // { shifts, name }
 
 function shiftFingerprint(s) {
-  return [s.date, s.time, s.type, s.client].join('|').toLowerCase();
+  return [s.date, s.startTime, s.endTime, s.type, s.client].join('|').toLowerCase();
 }
 
 let pendingShifts = null;
@@ -1159,7 +1151,8 @@ function addManualShift() {
     date: '',
     type: '',
     client: '',
-    time: '',
+    startTime: '',
+    endTime: '',
     durationHrs: 0,
     rule: { match: '', type: 'hourly', mode: 'flat', rate: 0 },
     location: null,
@@ -1185,6 +1178,32 @@ function rateLabelPlain(rule) {
   if (rule.type === 'per_person') return `$${rule.pricePerPerson ?? 0}/person x ${rule.coachShare ?? 0}%`;
   if (rule.mode === 'split') return `$${rule.clientRate ?? 0}-$${rule.agapeCut ?? 0}/hr`;
   return `$${rule.rate ?? 0}/hr`;
+}
+
+// Shifts store date/time in the canonical ISO form native <input type="date">
+// / <input type="time"> controls use (yyyy-mm-dd, 24hr HH:MM) — these convert
+// back to the M/D/YY + "8:00AM-9:00AM" display format the exported sheet has
+// always used, so only the editing UI changed, not the CSV/docx output.
+function formatDateDisplay(iso) {
+  const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso || '';
+  const [, y, mo, d] = m;
+  return `${Number(mo)}/${Number(d)}/${y.slice(2)}`;
+}
+function formatTime12(hhmm) {
+  const m = (hhmm || '').match(/^(\d{2}):(\d{2})$/);
+  if (!m) return '';
+  let h = Number(m[1]);
+  const min = m[2];
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${min}${ampm}`;
+}
+function formatTimeRange(startTime, endTime) {
+  const s = formatTime12(startTime);
+  const e = formatTime12(endTime);
+  if (!s && !e) return '';
+  return `${s}-${e}`;
 }
 
 function renderResults() {
@@ -1217,18 +1236,23 @@ function renderResults() {
     html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
     html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Time</th><th scope="col">Rate</th><th scope="col"># people</th>${loc === 'Unassigned' ? '<th scope="col">Location</th>' : ''}<th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
     rows.forEach(r => {
+      const dateDisplay = formatDateDisplay(r.date) || 'no date';
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
-      const peopleCell = `<input type="number" min="0" class="cell-input" style="width:50px" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${escapeHtml(r.date)}"
+      const peopleCell = `<input type="number" min="0" class="cell-input" style="width:50px" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
              onchange="setShiftPeople(${r.id}, this.value)">${maxHint}`;
       const locCell = loc === 'Unassigned'
-        ? `<input list="locOptions" class="cell-input" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${escapeHtml(r.date)}"
+        ? `<input list="locOptions" class="cell-input" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
              onchange="setShiftLocation(${r.id}, this.value)">`
         : '';
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
       html += `<tr>
-        <td><input class="cell-input" style="width:70px" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
+        <td><input type="date" class="cell-input" style="width:130px" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
         <td><input class="cell-input" style="width:100%;min-width:160px" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
-        <td><input class="cell-input" style="width:110px" value="${escapeHtml(r.time)}" aria-label="Time" onchange="setShiftField(${r.id},'time',this.value)"></td>
+        <td>
+          <input type="time" class="cell-input" style="width:100px" value="${escapeHtml(r.startTime || '')}" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">
+          <span aria-hidden="true">&ndash;</span>
+          <input type="time" class="cell-input" style="width:100px" value="${escapeHtml(r.endTime || '')}" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">
+        </td>
         <td>${rateLabelFor(r.rule)}</td>
         <td>${peopleCell}</td>
         ${loc === 'Unassigned' ? `<td>${locCell}</td>` : ''}
@@ -1237,7 +1261,7 @@ function renderResults() {
             value="${amountFor(r).toFixed(2)}" aria-label="Amount${overridden ? ', manually overridden' : ''}" onchange="setShiftAmount(${r.id}, this.value)">
           ${overridden ? `<button class="reset-btn" title="Reset to calculated amount" aria-label="Reset amount to calculated value" onclick="resetShiftAmount(${r.id})">&#8635;</button>` : ''}
         </td>
-        <td><button class="row-del" title="Remove this line" aria-label="Delete this row (${escapeHtml(r.type) || 'blank'} on ${escapeHtml(r.date) || 'no date'})" onclick="deleteShift(${r.id})">&times;</button></td>
+        <td><button class="row-del" title="Remove this line" aria-label="Delete this row (${escapeHtml(r.type) || 'blank'} on ${dateDisplay})" onclick="deleteShift(${r.id})">&times;</button></td>
       </tr>`;
     });
     html += `<tr class="subtotal-row"><td colspan="${loc === 'Unassigned' ? 6 : 5}">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
@@ -1274,7 +1298,7 @@ function downloadCsv() {
   let csv = 'Location,Date,Type of Class,Time,Rate,# People,Amount\n';
   Object.entries(byLocation).forEach(([loc, rows]) => {
     rows.forEach(r => {
-      csv += `"${loc}","${r.date}","${r.type.replace(/"/g, '""')}","${r.time}","${rateLabelPlain(r.rule)}",${r.numPeople ?? ''},${amountFor(r).toFixed(2)}\n`;
+      csv += `"${loc}","${formatDateDisplay(r.date)}","${r.type.replace(/"/g, '""')}","${formatTimeRange(r.startTime, r.endTime)}","${rateLabelPlain(r.rule)}",${r.numPeople ?? ''},${amountFor(r).toFixed(2)}\n`;
     });
   });
   csv += `,,,,,TOTAL,${grandTotal.toFixed(2)}\n`;
@@ -1319,7 +1343,7 @@ async function downloadDocx() {
 
     const dataRows = rows.map(r => {
       return new TableRow({
-        children: [r.date, r.type, r.time, rateLabelPlain(r.rule), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].map((val, i) => new TableCell({
+        children: [formatDateDisplay(r.date), r.type, formatTimeRange(r.startTime, r.endTime), rateLabelPlain(r.rule), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].map((val, i) => new TableCell({
           width: { size: colWidths[i], type: WidthType.DXA },
           children: [new Paragraph({ alignment: i >= 4 ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: String(val) })] })],
         })),
