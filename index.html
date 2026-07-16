@@ -1180,6 +1180,18 @@ function rateLabelPlain(rule) {
   return `$${rule.rate ?? 0}/hr`;
 }
 
+// Exports show the real effective hourly rate, not the rule's raw formula —
+// a per-person split like "$20/person x 50%" doesn't tell you what the
+// lesson actually paid per hour once headcount and duration are folded in.
+// Flat/split-hourly rules already *are* an hourly rate, so their formula is
+// left alone; only per-person needs the computed rate appended.
+function hourlyWageLabel(shift) {
+  const plain = rateLabelPlain(shift.rule);
+  if (shift.rule.type !== 'per_person' || !shift.durationHrs) return plain;
+  const perHour = (amountFor(shift) / shift.durationHrs).toFixed(2);
+  return `$${perHour}/hr (${plain})`;
+}
+
 // Shifts store date/time in the canonical ISO form native <input type="date">
 // / <input type="time"> controls use (yyyy-mm-dd, 24hr HH:MM) — these convert
 // back to the M/D/YY + "8:00AM-9:00AM" display format the exported sheet has
@@ -1298,7 +1310,7 @@ function downloadCsv() {
   let csv = 'Location,Date,Type of Class,Time,Rate,# People,Amount\n';
   Object.entries(byLocation).forEach(([loc, rows]) => {
     rows.forEach(r => {
-      csv += `"${loc}","${formatDateDisplay(r.date)}","${r.type.replace(/"/g, '""')}","${formatTimeRange(r.startTime, r.endTime)}","${rateLabelPlain(r.rule)}",${r.numPeople ?? ''},${amountFor(r).toFixed(2)}\n`;
+      csv += `"${loc}","${formatDateDisplay(r.date)}","${r.type.replace(/"/g, '""')}","${formatTimeRange(r.startTime, r.endTime)}","${hourlyWageLabel(r)}",${r.numPeople ?? ''},${amountFor(r).toFixed(2)}\n`;
     });
   });
   csv += `,,,,,TOTAL,${grandTotal.toFixed(2)}\n`;
@@ -1343,7 +1355,7 @@ async function downloadDocx() {
 
     const dataRows = rows.map(r => {
       return new TableRow({
-        children: [formatDateDisplay(r.date), r.type, formatTimeRange(r.startTime, r.endTime), rateLabelPlain(r.rule), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].map((val, i) => new TableCell({
+        children: [formatDateDisplay(r.date), r.type, formatTimeRange(r.startTime, r.endTime), hourlyWageLabel(r), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].map((val, i) => new TableCell({
           width: { size: colWidths[i], type: WidthType.DXA },
           children: [new Paragraph({ alignment: i >= 4 ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: String(val) })] })],
         })),
