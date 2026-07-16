@@ -269,6 +269,7 @@
   <header>
     <h1>Agape Timesheet Builder</h1>
     <div class="sub">turn your schedule into a timesheet</div>
+    <div class="sub" style="margin-top:2px">Works best on a laptop or desktop browser.</div>
   </header>
 
   <section>
@@ -1085,6 +1086,9 @@ function confirmAdd() {
 }
 
 function clearAll() {
+  if (lastResult && lastResult.shifts.length > 0) {
+    if (!confirm('Clear the whole sheet and start over? This wipes every entry you\'ve added — it can\'t be undone.')) return;
+  }
   try {
     lastResult = null;
     pendingShifts = null;
@@ -1207,7 +1211,7 @@ function renderResults() {
     const rows = byLocation[loc];
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
-    html += `<table><tr><th>Date</th><th>Type of class</th><th>Time</th><th>Rate</th><th># people</th>${loc === 'Unassigned' ? '<th>Location</th>' : ''}<th class="num">Amount</th><th></th></tr>`;
+    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Time</th><th scope="col">Rate</th><th scope="col"># people</th>${loc === 'Unassigned' ? '<th scope="col">Location</th>' : ''}<th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
     rows.forEach(r => {
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
       const peopleCell = `<input type="number" min="0" class="cell-input" style="width:50px" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${escapeHtml(r.date)}"
@@ -1225,7 +1229,7 @@ function renderResults() {
         <td>${peopleCell}</td>
         ${loc === 'Unassigned' ? `<td>${locCell}</td>` : ''}
         <td class="num">
-          <input class="cell-input amount-input" style="width:70px;text-align:right;${overridden ? 'color:var(--warn);font-weight:600' : ''}"
+          <input class="cell-input amount-input" type="number" step="0.01" style="width:70px;text-align:right;${overridden ? 'color:var(--warn);font-weight:600' : ''}"
             value="${amountFor(r).toFixed(2)}" aria-label="Amount${overridden ? ', manually overridden' : ''}" onchange="setShiftAmount(${r.id}, this.value)">
           ${overridden ? `<button class="reset-btn" title="Reset to calculated amount" aria-label="Reset amount to calculated value" onclick="resetShiftAmount(${r.id})">&#8635;</button>` : ''}
         </td>
