@@ -38,16 +38,7 @@
     letter-spacing: -0.01em;
   }
   .sub { color: #5a5f57; font-size: 14px; font-family: var(--mono); }
-  .gate {
-    max-width: 360px;
-    margin: 120px auto;
-    padding: 32px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-  }
-  .gate h2 { font-size: 18px; margin: 0 0 16px; }
-  .gate input { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid var(--line); margin-bottom: 12px; font-family: var(--mono); }
-  .gate button, .btn {
+  .btn {
     background: var(--brand-purple);
     color: white;
     border: none;
@@ -57,7 +48,7 @@
     letter-spacing: 0.02em;
     cursor: pointer;
   }
-  .gate button:hover, .btn:hover { background: #502b6e; }
+  .btn:hover { background: #502b6e; }
   .btn.secondary { background: transparent; color: var(--brand-purple); border: 1px solid var(--brand-purple); }
   .bookmarklet-btn {
     display: inline-block;
@@ -80,7 +71,6 @@
     border: 2px dashed var(--brand-purple);
   }
   .btn.secondary:hover { background: var(--brand-purple-dim); }
-  .gate .err { color: var(--warn); font-size: 13px; margin-top: -4px; margin-bottom: 12px; display: none; }
   section { background: var(--panel); border: 1px solid var(--line); padding: 24px; margin-bottom: 20px; }
   section h2 {
     font-family: var(--mono);
@@ -257,15 +247,7 @@
 </head>
 <body>
 
-<div id="gate" class="gate">
-  <h2>Agape Timesheet Builder</h2>
-  <label for="pw" style="display:block;font-size:13px;margin-bottom:6px">Access code</label>
-  <input id="pw" type="password" placeholder="Access code" aria-describedby="pwErr">
-  <div class="err" id="pwErr" role="alert">Wrong code — check with whoever shared this link.</div>
-  <button onclick="checkPassword()">Enter</button>
-</div>
-
-<div id="app" class="wrap" style="display:none">
+<div id="app" class="wrap">
   <header>
     <h1>Agape Timesheet Builder</h1>
     <div class="sub">turn your schedule into a timesheet</div>
@@ -382,27 +364,6 @@ $40/hr on programmed groups, drills, classes"
 </div>
 
 <script>
-// ---------------------------------------------------------------------
-// Access gate (deterrent only — see README before treating this as real security)
-// ---------------------------------------------------------------------
-const ACCESS_CODE = "agape2026"; // CHANGE THIS before you deploy
-
-function checkPassword() {
-  const val = document.getElementById('pw').value;
-  if (val === ACCESS_CODE) {
-    document.getElementById('gate').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    sessionStorage.setItem('ts_unlocked', '1');
-  } else {
-    document.getElementById('pwErr').style.display = 'block';
-  }
-}
-if (sessionStorage.getItem('ts_unlocked') === '1') {
-  document.getElementById('gate').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-}
-document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
-
 // ---------------------------------------------------------------------
 // Settings persistence (localStorage — per-browser, never committed to repo)
 // ---------------------------------------------------------------------

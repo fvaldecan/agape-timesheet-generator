@@ -39,23 +39,16 @@ It's a single static file (`index.html`) — any static host works.
 
 ## Before you make the repo public — read this
 
-### The "password" is not real security
+### There's no access control on the page itself
 
-`ACCESS_CODE` in `index.html` is checked entirely in the browser. In a
-**public** repo, anyone can open the source file and read the code in
-plain text — the gate only stops someone from casually stumbling onto the
-page, not someone who looks at the code for ten seconds. Don't rely on it
-to keep out anyone who might actually want in.
+This app doesn't hold any secrets or private data of its own (everything
+sensitive stays local to each coach's browser), so the stakes of someone
+stumbling onto the page are low — worst case, a stranger sees a form for
+building a commission sheet with no data in it. Anyone with the link can
+open it, though, and it'll show up in search engines if left unguarded.
 
-Because this app doesn't hold any secrets or private data of its own
-(everything sensitive stays local to each coach's browser), the actual
-stakes of someone bypassing the code are low — worst case, a stranger sees
-a form for building a commission sheet with no data in it. If that's an
-acceptable risk for you, the built-in gate is a reasonable "keep it out of
-search engines and casual link-sharing" measure and nothing more.
-
-If you want something that's actually access-controlled, here are real
-options, roughly cheapest/easiest first:
+If you want it access-controlled, here are real options, roughly
+cheapest/easiest first:
 
 - **Cloudflare Pages + Cloudflare Access** — deploy the static site to
   Cloudflare Pages, then put it behind Cloudflare Access with an email
