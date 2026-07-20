@@ -1,4 +1,4 @@
-# Agape Timesheet Builder
+# Agape Timesheet Generator
 
 A small web app that turns a Club Automation weekly schedule into a
 formatted, totaled commission sheet — .docx or .csv. Everything runs in

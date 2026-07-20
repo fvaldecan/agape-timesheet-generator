@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agape Timesheet Builder</title>
+<title>Agape Timesheet Generator</title>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
 <style>
   :root {
@@ -249,7 +249,7 @@
 
 <div id="app" class="wrap">
   <header>
-    <h1>Agape Timesheet Builder</h1>
+    <h1>Agape Timesheet Generator</h1>
     <div class="sub">turn your schedule into a timesheet</div>
     <div class="sub" style="margin-top:2px">Works best on a laptop or desktop browser.</div>
   </header>
@@ -1224,7 +1224,7 @@ function renderResults() {
     const rows = byLocation[loc];
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
-    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Time</th><th scope="col">Rate</th><th scope="col"># people</th>${loc === 'Unassigned' ? '<th scope="col">Location</th>' : ''}<th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
+    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Time</th><th scope="col">Hourly Wage of Employee for each class</th><th scope="col"># people</th>${loc === 'Unassigned' ? '<th scope="col">Location</th>' : ''}<th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
     rows.forEach(r => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
