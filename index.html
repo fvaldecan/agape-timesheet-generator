@@ -1118,6 +1118,20 @@ function setShiftPeople(id, value) {
   shift.numPeople = isNaN(n) ? null : n;
   renderResults();
 }
+// durationHrs normally comes from real calendar data at parse time, but
+// editing start/end time (manual line items, or fixing a parsed time) has to
+// keep it in sync by hand — otherwise hourly-rate rows stay priced off
+// whatever durationHrs happened to be before the edit (0 for a fresh manual
+// row), silently pinning amountFor() to $0 forever.
+function hoursBetween(startTime, endTime) {
+  const s = (startTime || '').match(/^(\d{2}):(\d{2})$/);
+  const e = (endTime || '').match(/^(\d{2}):(\d{2})$/);
+  if (!s || !e) return 0;
+  const startMin = Number(s[1]) * 60 + Number(s[2]);
+  let endMin = Number(e[1]) * 60 + Number(e[2]);
+  if (endMin < startMin) endMin += 24 * 60; // overnight session
+  return Math.round(((endMin - startMin) / 60) * 100) / 100;
+}
 function setShiftField(id, field, value) {
   const shift = lastResult.shifts.find(s => s.id === id);
   if (!shift) return;
@@ -1125,6 +1139,9 @@ function setShiftField(id, field, value) {
   if (field === 'type') {
     shift.rule = classifyRate(value);
     shift.numPeople = shift.rule.defaultPeople ?? 1;
+  }
+  if (field === 'startTime' || field === 'endTime') {
+    shift.durationHrs = hoursBetween(shift.startTime, shift.endTime);
   }
   renderResults();
 }
