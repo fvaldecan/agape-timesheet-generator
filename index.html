@@ -243,6 +243,26 @@
   .empty { color: var(--dim); font-size: 14px; font-style: italic; }
   .actions { margin-top: 20px; display: flex; gap: 10px; }
   footer { margin-top: 40px; font-size: 12px; color: var(--dim); font-family: var(--mono); text-align: center; }
+  #printArea { display: none; }
+  .print-name, .print-title { font-weight: 600; font-size: 15px; }
+  .print-name { margin-bottom: 2px; }
+  .print-date { font-size: 12px; color: #444; margin-bottom: 10px; }
+  .print-title { margin-bottom: 16px; }
+  .print-loc { font-weight: 600; font-size: 13px; margin: 10px 0 5px; }
+  .print-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 3px; }
+  .print-table th, .print-table td { border: 1px solid #999; padding: 3px 5px; text-align: left; }
+  .print-table tr { page-break-inside: avoid; }
+  .print-loc { page-break-after: avoid; }
+  .print-table th.num, .print-table td.num { text-align: right; }
+  .print-subtotal td { font-weight: 600; text-align: right; }
+  .print-total { font-weight: 700; font-size: 15px; margin-top: 10px; }
+  .print-comp-title { font-weight: 600; font-size: 12px; margin-top: 14px; border-top: 1px solid #ccc; padding-top: 6px; }
+  .print-comp ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
+  @media print {
+    @page { margin: 0.5in; }
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: block !important; }
+  }
 </style>
 </head>
 <body>
@@ -354,7 +374,8 @@ $40/hr on programmed groups, drills, classes"
     <h2>4. Timesheet</h2>
     <div id="results"></div>
     <div class="actions">
-      <button class="btn" onclick="downloadDocx()">Download .docx</button>
+      <button class="btn" onclick="printTimesheet()">Print / Save as PDF</button>
+      <button class="btn secondary" onclick="downloadDocx()">Download .docx</button>
       <button class="btn secondary" onclick="downloadCsv()">Download .csv</button>
       <button class="btn secondary" onclick="clearAll()">Clear &amp; start over</button>
     </div>
@@ -362,6 +383,8 @@ $40/hr on programmed groups, drills, classes"
 
   <footer>Made with 💜 by Coach Nicky</footer>
 </div>
+
+<div id="printArea"></div>
 
 <script>
 // ---------------------------------------------------------------------
@@ -1180,6 +1203,12 @@ function formatDateDisplay(iso) {
   const [, y, mo, d] = m;
   return `${Number(mo)}/${Number(d)}/${y.slice(2)}`;
 }
+// Today in the same yyyy-mm-dd form formatDateDisplay expects — local date,
+// not UTC, so it can't drift a day off around midnight.
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function formatTime12(hhmm) {
   const m = (hhmm || '').match(/^(\d{2}):(\d{2})$/);
   if (!m) return '';
@@ -1285,7 +1314,9 @@ function downloadCsv() {
   if (!lastResult) return;
   if (!confirmUnassignedExport()) return;
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
-  let csv = 'Location,Date,Type of Class,Time,Rate,# People,Amount\n';
+  let csv = `Name,"${lastResult.name.replace(/"/g, '""')}"\n`;
+  csv += `Date,${formatDateDisplay(todayIso())}\n\n`;
+  csv += 'Location,Date,Type of Class,Time,Rate,# People,Amount\n';
   Object.entries(byLocation).forEach(([loc, rows]) => {
     rows.forEach(r => {
       csv += `"${loc}","${formatDateDisplay(r.date)}","${r.type.replace(/"/g, '""')}","${formatTimeRange(r.startTime, r.endTime)}","${hourlyWageLabel(r)}",${r.numPeople ?? ''},${amountFor(r).toFixed(2)}\n`;
@@ -1300,7 +1331,7 @@ function downloadCsv() {
   }
 
   const blob = new Blob([csv], { type: 'text/csv' });
-  triggerDownload(blob, 'timesheet.csv');
+  triggerDownload(blob, exportBaseFilename() + '.csv');
 }
 
 async function downloadDocx() {
@@ -1324,6 +1355,7 @@ async function downloadDocx() {
 
   const children = [
     new Paragraph({ children: [new TextRun({ text: `Name ${lastResult.name}`, bold: true, size: 24 })] }),
+    new Paragraph({ children: [new TextRun({ text: `Date ${formatDateDisplay(todayIso())}`, size: 20 })], spacing: { after: 100 } }),
     new Paragraph({ children: [new TextRun({ text: 'TIMESHEET', bold: true, size: 24 })], spacing: { after: 300 } }),
   ];
 
@@ -1374,10 +1406,74 @@ async function downloadDocx() {
   try {
     const doc = new Document({ sections: [{ properties: { page: { size: { width: 12240, height: 15840 } } }, children }] });
     const blob = await Packer.toBlob(doc);
-    triggerDownload(blob, 'timesheet.docx');
+    triggerDownload(blob, exportBaseFilename() + '.docx');
   } catch (err) {
     alert('Something went wrong making the Word file. Try "Download .csv" instead, or reload the page and try again.');
   }
+}
+
+// Renders the same data as downloadDocx() into a hidden #printArea (shown
+// only under @media print, see <style>), then hands off to the browser's
+// own print engine instead of a PDF library. Word/PDF-library table layout
+// is where the formatting complaints came from; the browser's print engine
+// is what already renders the on-screen table correctly, so reusing it
+// sidesteps that whole class of bug instead of adding a second layout engine.
+function printTimesheet() {
+  if (!lastResult) return;
+  if (!confirmUnassignedExport()) return;
+  const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
+
+  let html = `<div class="print-name">Name: ${escapeHtml(lastResult.name)}</div>`;
+  html += `<div class="print-date">Date: ${escapeHtml(formatDateDisplay(todayIso()))}</div>`;
+  html += `<div class="print-title">TIMESHEET</div>`;
+
+  Object.entries(byLocation).forEach(([loc, rows]) => {
+    const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
+    html += `<div class="print-loc">${escapeHtml(loc.toUpperCase())}</div>`;
+    html += `<table class="print-table"><tr><th>Date</th><th>Type of Class</th><th>Time</th><th>Hourly Wage of Employee for each class</th><th class="num"># People</th><th class="num">Amount</th></tr>`;
+    rows.forEach(r => {
+      html += `<tr>
+        <td>${escapeHtml(formatDateDisplay(r.date))}</td>
+        <td>${escapeHtml(r.type)}</td>
+        <td>${escapeHtml(formatTimeRange(r.startTime, r.endTime))}</td>
+        <td>${escapeHtml(hourlyWageLabel(r))}</td>
+        <td class="num">${r.numPeople ?? '—'}</td>
+        <td class="num">$${amountFor(r).toFixed(2)}</td>
+      </tr>`;
+    });
+    html += `<tr class="print-subtotal"><td colspan="5">Subtotal:</td><td>$${subtotal.toFixed(2)}</td></tr>`;
+    html += `</table>`;
+  });
+
+  html += `<div class="print-total">TOTAL: $${grandTotal.toFixed(2)}</div>`;
+
+  const compLines = parseBulletLines(state.compNotes);
+  if (compLines.length > 0) {
+    html += `<div class="print-comp-title">COMPENSATION</div>`;
+    html += `<div class="print-comp"><ul>${compLines.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></div>`;
+  }
+
+  document.getElementById('printArea').innerHTML = html;
+  const prevTitle = document.title;
+  document.title = exportBaseFilename();
+  const restoreTitle = () => { document.title = prevTitle; window.removeEventListener('afterprint', restoreTitle); };
+  window.addEventListener('afterprint', restoreTitle);
+  window.print();
+}
+
+// Windows/macOS both reject a handful of characters in filenames — strip
+// them rather than let a coach's name (which can contain anything) produce
+// a save dialog error.
+function sanitizeFilenamePart(s) {
+  return (s || '').replace(/[\\/:*?"<>|]/g, '').trim();
+}
+// Shared by the docx/csv downloads and the print dialog's suggested name
+// (browsers derive that from document.title) so all three exports agree.
+function exportBaseFilename() {
+  const name = sanitizeFilenamePart(lastResult && lastResult.name) || 'Timesheet';
+  const d = new Date();
+  const date = `${d.getMonth() + 1}-${d.getDate()}-${String(d.getFullYear()).slice(2)}`;
+  return `${name} - Timesheet - ${date}`;
 }
 
 function triggerDownload(blob, filename) {
