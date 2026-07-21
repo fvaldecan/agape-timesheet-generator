@@ -1022,16 +1022,14 @@ function renderResults() {
     const rows = byLocation[loc];
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
-    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Time</th><th scope="col">Hourly Wage of Employee for each class</th><th scope="col"># people</th>${loc === 'Unassigned' ? '<th scope="col">Location</th>' : ''}<th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
+    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Time</th><th scope="col">Hourly Wage of Employee for each class</th><th scope="col"># people</th><th scope="col">Location</th><th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
     rows.forEach(r => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
       const peopleCell = `<input type="number" min="0" class="cell-input w-50" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
              onchange="setShiftPeople(${r.id}, this.value)">${maxHint}`;
-      const locCell = loc === 'Unassigned'
-        ? `<input list="locOptions" class="cell-input" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
-             onchange="setShiftLocation(${r.id}, this.value)">`
-        : '';
+      const locCell = `<input list="locOptions" class="cell-input" value="${escapeHtml(r.location || '')}" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
+             onchange="setShiftLocation(${r.id}, this.value)">`;
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
       html += `<tr>
         <td><input type="date" class="cell-input w-130" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
@@ -1043,7 +1041,7 @@ function renderResults() {
         </td>
         <td>${rateLabelFor(r.rule)}</td>
         <td>${peopleCell}</td>
-        ${loc === 'Unassigned' ? `<td>${locCell}</td>` : ''}
+        <td>${locCell}</td>
         <td class="num">
           <input class="cell-input amount-input${overridden ? ' amount-overridden' : ''}" type="number" step="0.01"
             value="${amountFor(r).toFixed(2)}" aria-label="Amount${overridden ? ', manually overridden' : ''}" onchange="setShiftAmount(${r.id}, this.value)">
@@ -1052,7 +1050,7 @@ function renderResults() {
         <td><button class="row-del" title="Remove this line" aria-label="Delete this row (${escapeHtml(r.type) || 'blank'} on ${dateDisplay})" onclick="deleteShift(${r.id})">&times;</button></td>
       </tr>`;
     });
-    html += `<tr class="subtotal-row"><td colspan="${loc === 'Unassigned' ? 6 : 5}">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
+    html += `<tr class="subtotal-row"><td colspan="6">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
     html += `</table>`;
   });
 

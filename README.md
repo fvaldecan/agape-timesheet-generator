@@ -126,8 +126,10 @@ it, and everything they enter stays local to their browser (see above).
   remembered client-to-client, since the same client can attend either
   location. A prominent warning shows above the results whenever anything
   is unassigned, and exporting with unassigned entries asks for
-  confirmation first. Group class titles ending in "- FV" / "- CM" still
-  get their location guessed from that suffix, still editable if wrong.
+  confirmation first. The Location column is editable on every row, not
+  just unassigned ones, so a wrong guess (from the click-fetch detail, or
+  the "- FV" / "- CM" title-suffix hint) can be corrected directly —
+  editing it moves the row into the right group immediately.
 - **Group class headcount isn't in the calendar data**, so it can't be
   auto-detected. Any rate rule set to "Per-person split" shows an editable
   headcount field per session. Hourly rules also show an editable "#
