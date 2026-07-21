@@ -73,8 +73,8 @@
     <label for="htmlInput" class="field-label mt-14 mb-4">Schedule HTML</label>
     <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
     <div class="row">
-      <button class="btn" onclick="runParse()">Parse</button>
-      <button class="btn hidden" id="confirmAddBtn" onclick="confirmAdd()">Add to sheet</button>
+      <button class="btn" onclick="runParse()" data-goatcounter-click='{"path":"click-parse","title":"Parse schedule","event":true}'>Parse</button>
+      <button class="btn hidden" id="confirmAddBtn" onclick="confirmAdd()" data-goatcounter-click='{"path":"click-add-to-sheet","title":"Add to sheet","event":true}'>Add to sheet</button>
     </div>
     <div id="parseStatus" class="row status-text" role="status" aria-live="polite"></div>
   </section>
@@ -123,9 +123,9 @@ $40/hr on programmed groups, drills, classes"
     <h2>4. Timesheet</h2>
     <div id="results"></div>
     <div class="actions">
-      <button class="btn" onclick="printTimesheet()">Print / Save as PDF</button>
-      <button class="btn secondary" onclick="downloadDocx()">Download .docx</button>
-      <button class="btn secondary" onclick="downloadCsv()">Download .csv</button>
+      <button class="btn" onclick="printTimesheet()" data-goatcounter-click='{"path":"click-print","title":"Print / Save as PDF","event":true}'>Print / Save as PDF</button>
+      <button class="btn secondary" onclick="downloadDocx()" data-goatcounter-click='{"path":"click-download-docx","title":"Download .docx","event":true}'>Download .docx</button>
+      <button class="btn secondary" onclick="downloadCsv()" data-goatcounter-click='{"path":"click-download-csv","title":"Download .csv","event":true}'>Download .csv</button>
       <button class="btn secondary" onclick="clearAll()">Clear &amp; start over</button>
     </div>
   </section>
@@ -718,6 +718,19 @@ function computeGroups(shifts) {
 // ---------------------------------------------------------------------
 let lastResult = null; // { shifts, name }
 
+// Fires a single anonymous "a timesheet got made" count the first time any
+// export button is used on the current sheet — repeat downloads or extra
+// formats of the same sheet don't inflate it. Reset only in clearAll(), so
+// it tracks "how many timesheets" rather than "how many export clicks."
+let hasCountedTimesheetCompletion = false;
+function countTimesheetCompletionOnce() {
+  if (hasCountedTimesheetCompletion) return;
+  hasCountedTimesheetCompletion = true;
+  if (window.goatcounter && window.goatcounter.count) {
+    window.goatcounter.count({ path: 'timesheet-completed', title: 'Timesheet completed', event: true });
+  }
+}
+
 function shiftFingerprint(s) {
   return [s.date, s.startTime, s.endTime, s.type, s.client].join('|').toLowerCase();
 }
@@ -823,6 +836,7 @@ function clearAll() {
     lastResult = null;
     pendingShifts = null;
     pendingSummary = null;
+    hasCountedTimesheetCompletion = false;
     const htmlInput = document.getElementById('htmlInput');
     if (htmlInput) htmlInput.value = '';
     const status = document.getElementById('parseStatus');
@@ -1067,6 +1081,7 @@ function confirmUnassignedExport() {
 function downloadCsv() {
   if (!lastResult) return;
   if (!confirmUnassignedExport()) return;
+  countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   let csv = `Name,"${lastResult.name.replace(/"/g, '""')}"\n`;
   csv += `Date,${formatDateDisplay(todayIso())}\n\n`;
@@ -1095,6 +1110,7 @@ async function downloadDocx() {
     return;
   }
   if (!confirmUnassignedExport()) return;
+  countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, ShadingType } = docx;
   const colWidths = [1300, 3600, 1800, 1500, 1000, 1400];
@@ -1175,6 +1191,7 @@ async function downloadDocx() {
 function printTimesheet() {
   if (!lastResult) return;
   if (!confirmUnassignedExport()) return;
+  countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
 
   let html = `<div class="print-name">Name: ${escapeHtml(lastResult.name)}</div>`;
@@ -1238,5 +1255,19 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 </script>
+
+<!--
+  Usage analytics — GoatCounter (goatcounter.com), a free, open-source,
+  cookie-free pageview/click counter. Only records anonymized aggregate
+  visit counts and which buttons below get clicked (see the
+  data-goatcounter-click attributes above) — never the schedule HTML,
+  rate settings, or anything a coach types in, all of which still stay
+  local to their own browser (see README).
+
+  Before this goes live, sign up free at https://www.goatcounter.com/
+  and replace YOURCODE below with your site code from Settings → Site.
+-->
+<script data-goatcounter="https://fdsvn.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>

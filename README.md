@@ -25,9 +25,17 @@ static files.
 5. Downloads a `.docx` or `.csv` commission sheet once everything's in.
 6. **Clear & start over** wipes everything to begin a fresh pay period.
 
-Nothing is ever sent to a server. The schedule HTML and your rate
-settings all stay in your own browser — there's no client roster stored
-anywhere, so no client names ever touch the code or a server.
+Your schedule data never leaves your browser. The schedule HTML, rate
+settings, and compensation notes all stay local — there's no client
+roster stored anywhere, so no client names ever touch a server. The one
+exception is anonymous usage analytics ([GoatCounter](https://www.goatcounter.com/)):
+it records aggregate pageviews, unique visitors, which export buttons get
+clicked, and a "timesheet completed" event (fired once per sheet, the
+first time any export happens — repeat downloads or extra formats of the
+same sheet don't inflate it). It never sees the schedule content, rate
+numbers, or anything typed into the app. See the `<script
+data-goatcounter>` tag near the bottom of `index.html` if you want to see
+exactly what it sends, or strip it out entirely.
 
 ## Deploying it
 
