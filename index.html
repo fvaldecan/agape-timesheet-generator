@@ -939,12 +939,19 @@ function knownLocations() {
   return [...set];
 }
 
+// A rule with no match text is the classifyRate() fallback for a title that
+// hit nothing configured (see classifyRate) — real rules always have match
+// text, since validateRates() blocks Parse until every row has one. That
+// makes `!rule.match` a reliable signal for "this shift's $0 is a fallback,
+// not a real rate," distinct everywhere it's displayed or exported.
 function rateLabelFor(rule) {
+  if (!rule.match) return '<span class="rate-unmatched">No rate matched</span>';
   if (rule.type === 'per_person') return `$${rule.pricePerPerson ?? 0}/person &times; ${rule.coachShare ?? 0}%`;
   if (rule.mode === 'split') return `$${rule.clientRate ?? 0}&minus;$${rule.agapeCut ?? 0}/hr`;
   return `$${rule.rate ?? 0}/hr`;
 }
 function rateLabelPlain(rule) {
+  if (!rule.match) return 'No rate matched';
   if (rule.type === 'per_person') return `$${rule.pricePerPerson ?? 0}/person x ${rule.coachShare ?? 0}%`;
   if (rule.mode === 'split') return `$${rule.clientRate ?? 0}-$${rule.agapeCut ?? 0}/hr`;
   return `$${rule.rate ?? 0}/hr`;
@@ -1013,7 +1020,11 @@ function renderResults() {
 
   let html = `<datalist id="locOptions">${knownLocations().map(l => `<option value="${escapeHtml(l)}">`).join('')}</datalist>`;
   const unassignedCount = (byLocation['Unassigned'] || []).length;
+  const unmatchedRateCount = shifts.filter(s => !s.rule.match).length;
 
+  if (unmatchedRateCount > 0) {
+    html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unmatchedRateCount} entr${unmatchedRateCount === 1 ? 'y has' : 'ies have'} no matching rate rule</strong> — showing $0.00, marked "No rate matched" below. Add a rate rule in Settings, or fix the row's Type of class text so it matches one.</div>`;
+  }
   if (unassignedCount > 0) {
     html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unassignedCount} entr${unassignedCount === 1 ? 'y needs' : 'ies need'} a location</strong> — pick one per row below in UNASSIGNED.</div>`;
   }
@@ -1076,10 +1087,19 @@ function confirmUnassignedExport() {
   const n = lastResult.shifts.filter(s => !s.location).length;
   return confirm(`${n} entr${n === 1 ? 'y is' : 'ies are'} still missing a location. Export anyway?`);
 }
+function hasUnmatchedRate() {
+  return lastResult && lastResult.shifts.some(s => !s.rule.match);
+}
+function confirmUnmatchedRateExport() {
+  if (!hasUnmatchedRate()) return true;
+  const n = lastResult.shifts.filter(s => !s.rule.match).length;
+  return confirm(`${n} entr${n === 1 ? 'y has' : 'ies have'} no matching rate rule and will show $0.00. Export anyway?`);
+}
 
 function downloadCsv() {
   if (!lastResult) return;
   if (!confirmUnassignedExport()) return;
+  if (!confirmUnmatchedRateExport()) return;
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   let csv = `Name,"${lastResult.name.replace(/"/g, '""')}"\n`;
@@ -1109,6 +1129,7 @@ async function downloadDocx() {
     return;
   }
   if (!confirmUnassignedExport()) return;
+  if (!confirmUnmatchedRateExport()) return;
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, ShadingType } = docx;
@@ -1190,6 +1211,7 @@ async function downloadDocx() {
 function printTimesheet() {
   if (!lastResult) return;
   if (!confirmUnassignedExport()) return;
+  if (!confirmUnmatchedRateExport()) return;
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
 

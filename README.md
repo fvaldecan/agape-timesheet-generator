@@ -130,6 +130,13 @@ it, and everything they enter stays local to their browser (see above).
   just unassigned ones, so a wrong guess (from the click-fetch detail, or
   the "- FV" / "- CM" title-suffix hint) can be corrected directly —
   editing it moves the row into the right group immediately.
+- **Booking titles that don't match any rate rule are flagged, not
+  silently zeroed.** If nothing in Settings matches a booking's title,
+  it's priced at $0.00 rather than guessing — but that row is marked "No
+  rate matched" (in place of a dollar figure) both on screen and in every
+  export, a warning banner calls out the count, and exporting asks for
+  confirmation first. Fix it by adding a rate rule that matches, or by
+  editing the row's Type of class text.
 - **Group class headcount isn't in the calendar data**, so it can't be
   auto-detected. Any rate rule set to "Per-person split" shows an editable
   headcount field per session. Hourly rules also show an editable "#
