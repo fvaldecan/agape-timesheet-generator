@@ -73,12 +73,14 @@ choice) and is either **Hourly** or **Per-person split**. Hourly rules
 have two pricing modes: a flat `$/hr` amount, or `client rate − Agape's
 cut` (e.g. billed at $65/hr, Agape takes $20, you get $45/hr) — useful
 since the cut varies by coach. Every hourly rule also has a default "#
-people," mainly for flagging semi-private lessons. `index.html` ships
-with Agape's default rate rules pre-filled as a starting point, editable
-per-user in Settings. If you'd rather not have comp structure visible in
-a public repo, blank those out in the source before publishing and let
-each coach fill in their own from the Settings panel the first time they
-use it.
+people," mainly for flagging semi-private lessons.
+
+`index.html`'s `DEFAULT_RATES` ships with the row *shapes* pre-filled
+(match text, pricing mode) but the actual dollar amounts left blank on
+purpose — this repo is public, so no real Agape pricing lives in the
+source. The app's own "missing field" highlighting walks each coach
+through filling in their own numbers in Settings the first time they use
+it, and everything they enter stays local to their browser (see above).
 
 ## Files
 
@@ -105,7 +107,7 @@ use it.
   fetch every event's detail on parse and skip manual location entry
   entirely.
 - **Open/unbooked slots are filtered out automatically.** Club Automation
-  shows unfilled "PL: Valdecanas" slots with no client name — those aren't
+  shows unfilled "PL: &lt;coach's last name&gt;" slots with no client name — those aren't
   real lessons and are excluded during parsing. If a real booking is ever
   missing a client name for some other reason, it'll silently disappear
   too — spot check the total against what you expect.
