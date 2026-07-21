@@ -126,8 +126,10 @@ it, and everything they enter stays local to their browser (see above).
   remembered client-to-client, since the same client can attend either
   location. A prominent warning shows above the results whenever anything
   is unassigned, and exporting with unassigned entries asks for
-  confirmation first. Group class titles ending in "- FV" / "- CM" still
-  get their location guessed from that suffix, still editable if wrong.
+  confirmation first. The Location column is editable on every row, not
+  just unassigned ones, so a wrong guess (from the click-fetch detail, or
+  the "- FV" / "- CM" title-suffix hint) can be corrected directly —
+  editing it moves the row into the right group immediately.
 - **Booking titles that don't match any rate rule are flagged, not
   silently zeroed.** If nothing in Settings matches a booking's title,
   it's priced at $0.00 rather than guessing — but that row is marked "No
