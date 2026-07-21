@@ -139,9 +139,14 @@ $40/hr on programmed groups, drills, classes"
 // ---------------------------------------------------------------------
 // Settings persistence (localStorage — per-browser, never committed to repo)
 // ---------------------------------------------------------------------
+// Pay figures are intentionally left blank — this is a public repo, so no
+// real Agape rate numbers ship in the source. The row shapes (title match +
+// pricing mode) are still filled in as a starting template; each coach fills
+// in their own $ amounts in Settings on first use, and the app's own
+// "missing field" highlighting guides them to do it.
 const DEFAULT_RATES = [
-  { match: "PL", matchMode: "startsWith", type: "hourly", mode: "flat", rate: 45, defaultPeople: 1 },
-  { match: "group class", matchMode: "contains", type: "per_person", pricePerPerson: 20, coachShare: 50 },
+  { match: "PL", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
+  { match: "group class", matchMode: "contains", type: "per_person", coachShare: 50 },
 ];
 
 function loadSettings() {
@@ -623,7 +628,7 @@ function buildShifts(events) {
       excluded.blocked.push(e);
       return;
     }
-    // Open/unbooked slots show as "PL: Valdecanas" with no client name — not a real lesson.
+    // Open/unbooked slots show as "PL: <coach's last name>" with no client name — not a real lesson.
     if (e.rawTitle.startsWith('PL') && !e.client) {
       excluded.emptySlots.push(e);
       return;
