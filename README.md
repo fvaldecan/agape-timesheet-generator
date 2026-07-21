@@ -2,7 +2,8 @@
 
 A small web app that turns a Club Automation weekly schedule into a
 formatted, totaled commission sheet — .docx or .csv. Everything runs in
-the browser; no backend, no database, nothing to host besides a static file.
+the browser; no backend, no database, nothing to host besides a couple of
+static files.
 
 **[Try it live](#)** _(update this link once deployed)_
 
@@ -30,7 +31,7 @@ anywhere, so no client names ever touch the code or a server.
 
 ## Deploying it
 
-It's a single static file (`index.html`) — any static host works.
+It's a couple of static files (`index.html` + `style.css`) — any static host works.
 
 **GitHub Pages** (what this repo is set up for):
 1. Push this repo to GitHub.
@@ -83,6 +84,7 @@ use it.
 ## Files
 
 - `index.html` — the whole app (parsing, calculation, export, everything)
+- `style.css` — all styling, kept out of `index.html` so the markup stays readable
 - `BOOKMARKLET.md` — the schedule-copy bookmarklet, code + install steps
 - `README.md` — this file
 

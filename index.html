@@ -5,265 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agape Timesheet Generator</title>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
-<style>
-  :root {
-    --ink: #1c2321;
-    --paper: #f8f6fb;
-    --panel: #ffffff;
-    --line: #9385aa;
-    --brand-purple: #64368a;
-    --brand-purple-dim: #ece4f4;
-    --brand-lime: #cddb00;
-    --warn: #a04a26;
-    --warn-dim: #f5e4db;
-    --dim: #5a5f57;
-    --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
-    --serif: "Source Serif 4", Georgia, serif;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: var(--serif);
-    line-height: 1.5;
-  }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 24px 80px; }
-  header { margin-bottom: 32px; }
-  h1 {
-    font-family: var(--serif);
-    font-weight: 600;
-    font-size: 28px;
-    margin: 0 0 4px;
-    letter-spacing: -0.01em;
-  }
-  .sub { color: #5a5f57; font-size: 14px; font-family: var(--mono); }
-  .btn {
-    background: var(--brand-purple);
-    color: white;
-    border: none;
-    padding: 10px 18px;
-    font-family: var(--mono);
-    font-size: 13px;
-    letter-spacing: 0.02em;
-    cursor: pointer;
-  }
-  .btn:hover { background: #502b6e; }
-  .btn.secondary { background: transparent; color: var(--brand-purple); border: 1px solid var(--brand-purple); }
-  .bookmarklet-btn {
-    display: inline-block;
-    background: var(--brand-lime);
-    color: var(--ink);
-    border: 2px dashed rgba(28,35,33,0.35);
-    padding: 10px 16px;
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    cursor: grab;
-    user-select: none;
-    border-radius: 2px;
-  }
-  .bookmarklet-btn:active { cursor: grabbing; }
-  .bookmarklet-btn.secondary {
-    background: transparent;
-    color: var(--brand-purple);
-    border: 2px dashed var(--brand-purple);
-  }
-  .btn.secondary:hover { background: var(--brand-purple-dim); }
-  section { background: var(--panel); border: 1px solid var(--line); padding: 24px; margin-bottom: 20px; }
-  section h2 {
-    font-family: var(--mono);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #5a5f57;
-    margin: 0 0 16px;
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 8px;
-  }
-  textarea {
-    width: 100%;
-    min-height: 140px;
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 12px;
-    border: 1px solid var(--line);
-    background: #fcfbf8;
-    resize: vertical;
-  }
-  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
-  #parseStatus, #updateTimesheetStatus { line-height: 1.5; }
-  #parseStatus.status-ok, #updateTimesheetStatus.status-ok { color: var(--brand-purple); }
-  #parseStatus.status-warn, #updateTimesheetStatus.status-warn { color: var(--warn); font-weight: 600; }
-  details { margin-top: 16px; }
-  summary {
-    cursor: pointer;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--brand-purple);
-    letter-spacing: 0.02em;
-  }
-  .config-grid { margin-top: 14px; }
-  .config-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr auto;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-  .config-row input { padding: 7px 9px; border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
-  .config-row button { background: none; border: 1px solid var(--line); cursor: pointer; color: #a04; font-family: var(--mono); font-size: 11px; }
-  .rate-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 8px;
-    padding: 8px;
-    background: #fcfbf8;
-    border: 1px solid var(--line);
-  }
-  .rate-row.dragging { opacity: 0.4; }
-  .rate-row.drag-over { border-top: 2px solid var(--brand-purple); }
-  .rate-drag-handle { cursor: grab; color: var(--dim); font-size: 15px; padding: 0 4px; user-select: none; }
-  .rate-drag-handle:active { cursor: grabbing; }
-  .rate-reorder { display: flex; flex-direction: column; gap: 1px; }
-  .rate-move-btn {
-    background: none; border: 1px solid var(--line); cursor: pointer; color: var(--dim);
-    font-size: 8px; line-height: 1; padding: 2px 4px;
-  }
-  .rate-move-btn:hover:not(:disabled) { color: var(--brand-purple); border-color: var(--brand-purple); }
-  .rate-move-btn:disabled { opacity: 0.3; cursor: default; }
-  .rate-row.rate-row-incomplete { border-left: 3px solid var(--warn); }
-  .rate-row input.field-missing { border-color: var(--warn); background: var(--warn-dim); }
-  .rate-row input.field-missing::placeholder { color: var(--warn); opacity: 1; }
-  .rate-row input, .rate-row select {
-    padding: 7px 9px;
-    border: 1px solid var(--line);
-    font-family: var(--mono);
-    font-size: 12px;
-  }
-  .rate-row .rate-match { flex: 1 1 160px; min-width: 140px; }
-  .rate-row .rate-type { flex: 0 0 auto; }
-  .rate-row .rate-fields { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; }
-  .rate-row .rate-fields input { width: 80px; }
-  .rate-row .rate-x, .rate-row .rate-suffix { font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; }
-  .affix {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid var(--line);
-    background: #fff;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: #5a5f57;
-    padding: 0 6px;
-    gap: 2px;
-  }
-  .affix input { border: none; width: 60px; padding: 6px 2px; font-family: var(--mono); font-size: 12px; }
-  .affix input:focus { outline: 2px solid var(--brand-purple); outline-offset: 1px; }
-  #ratesDirtyBanner {
-    display: none;
-    align-items: center;
-    gap: 12px;
-    background: var(--warn-dim);
-    border-left: 4px solid var(--warn);
-    padding: 10px 14px;
-    margin-top: 12px;
-    font-size: 13px;
-    font-family: var(--serif);
-  }
-  .rate-row button { background: none; border: 1px solid var(--line); cursor: pointer; color: #a04; font-family: var(--mono); font-size: 11px; padding: 6px 10px; }
-  .cell-input {
-    width: 100%;
-    padding: 4px 6px;
-    border: 1px solid var(--line);
-    font-family: var(--mono);
-    font-size: 12px;
-    background: #fffef9;
-  }
-  td .dim { color: var(--dim); }
-  .amount-input { display: inline-block; }
-  .reset-btn {
-    background: none; border: none; cursor: pointer; color: var(--warn);
-    font-size: 13px; margin-left: 2px; padding: 0 2px;
-  }
-  .row-del {
-    background: none; border: none; cursor: pointer; color: var(--dim);
-    font-size: 15px; padding: 0 4px;
-  }
-  .row-del:hover { color: var(--warn); }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #5a5f57; background: #fcfbf8; }
-  td.num, th.num { text-align: right; font-family: var(--mono); }
-  .loc-heading {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--brand-purple);
-    letter-spacing: 0.04em;
-    margin: 20px 0 4px;
-  }
-  .subtotal-row td { font-weight: 600; border-top: 1px solid var(--ink); border-bottom: none; }
-  .total {
-    font-family: var(--serif);
-    font-size: 22px;
-    font-weight: 600;
-    margin-top: 20px;
-    text-align: right;
-  }
-  .comp-notes {
-    margin-top: 28px;
-    padding-top: 16px;
-    border-top: 1px solid var(--line);
-  }
-  .comp-notes-title {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    color: #5a5f57;
-    margin-bottom: 8px;
-  }
-  .comp-notes ul { margin: 0; padding-left: 20px; }
-  .comp-notes li { font-size: 13px; margin-bottom: 4px; color: #3a3f38; }
-  .warn {
-    background: var(--warn-dim);
-    border-left: 3px solid var(--warn);
-    padding: 10px 14px;
-    font-size: 13px;
-    margin-top: 12px;
-    font-family: var(--mono);
-  }
-  .warn div { margin-bottom: 4px; }
-  .warn-strong {
-    background: #fbe2d8;
-    border-left: 4px solid var(--warn);
-    font-family: var(--serif);
-    font-size: 14px;
-  }
-  .empty { color: var(--dim); font-size: 14px; font-style: italic; }
-  .actions { margin-top: 20px; display: flex; gap: 10px; }
-  footer { margin-top: 40px; font-size: 12px; color: var(--dim); font-family: var(--mono); text-align: center; }
-  #printArea { display: none; }
-  .print-name, .print-title { font-weight: 600; font-size: 15px; }
-  .print-name { margin-bottom: 2px; }
-  .print-date { font-size: 12px; color: #444; margin-bottom: 10px; }
-  .print-title { margin-bottom: 16px; }
-  .print-loc { font-weight: 600; font-size: 13px; margin: 10px 0 5px; }
-  .print-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 3px; }
-  .print-table th, .print-table td { border: 1px solid #999; padding: 3px 5px; text-align: left; }
-  .print-table tr { page-break-inside: avoid; }
-  .print-loc { page-break-after: avoid; }
-  .print-table th.num, .print-table td.num { text-align: right; }
-  .print-subtotal td { font-weight: 600; text-align: right; }
-  .print-total { font-weight: 700; font-size: 15px; margin-top: 10px; }
-  .print-comp-title { font-weight: 600; font-size: 12px; margin-top: 14px; border-top: 1px solid #ccc; padding-top: 6px; }
-  .print-comp ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
-  @media print {
-    @page { margin: 0.5in; }
-    body > *:not(#printArea) { display: none !important; }
-    #printArea { display: block !important; }
-  }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -271,42 +13,41 @@
   <header>
     <h1>Agape Timesheet Generator</h1>
     <div class="sub">turn your schedule into a timesheet</div>
-    <div class="sub" style="margin-top:2px">Works best on a laptop or desktop browser.</div>
+    <div class="sub mt-2">Works best on a laptop or desktop browser.</div>
   </header>
 
   <section>
     <h2>1. Set up the "Get My Schedule" bookmarklet/button (one time only)</h2>
-    <p style="font-size:13px;color:#5a5f57;margin-top:0">
+    <p class="hint mt-0">
       Grabs your schedule automatically — no more copying it by hand.
     </p>
-    <p style="font-size:13px;color:#5a5f57">
+    <p class="hint">
       <strong>Drag this to your bookmarks bar.</strong> Don't see the bar? Press
       <strong>Ctrl+Shift+B</strong> (<strong>Cmd+Shift+B</strong> on Mac).
     </p>
-    <div class="row" style="gap:16px">
+    <div class="row gap-16">
       <a class="bookmarklet-btn" id="bookmarkletBtn" href="javascript:void(0);"
          onclick="alert('Drag this button up to your bookmarks bar instead of clicking it.'); return false;">
         &#128279; Get My Schedule
       </a>
     </div>
-    <details style="margin-top:12px">
+    <details class="mt-12">
       <summary>Dragging isn't working? Copy and paste it in instead</summary>
-      <div style="font-size:13px;color:#5a5f57;margin-top:10px;line-height:1.6">
-        <ol style="padding-left:18px">
+      <div class="detail-body">
+        <ol class="pl-18">
           <li>Right-click your bookmarks bar and choose <strong>Add page</strong> (or
           <strong>New bookmark</strong>).</li>
           <li>Name it <strong>Get My Schedule</strong> (or anything you'll recognize).</li>
           <li>For the web address / URL, copy everything in the box below and paste it in.</li>
           <li>Save.</li>
         </ol>
-        <label for="bookmarkletCode" style="display:block;font-size:12px;margin-top:8px">Bookmark URL (read-only, click to select)</label>
-        <textarea id="bookmarkletCode" readonly onclick="this.select()"
-          style="width:100%;min-height:70px;font-family:var(--mono);font-size:11px;padding:8px;border:1px solid var(--line);background:#fcfbf8;margin-top:4px"></textarea>
-        <button class="btn secondary" style="margin-top:8px" onclick="copyBookmarkletCode()">Copy</button>
-        <span id="copyStatus" role="status" aria-live="polite" style="font-size:12px;color:var(--brand-purple);margin-left:8px"></span>
+        <label for="bookmarkletCode" class="field-label mt-8">Bookmark URL (read-only, click to select)</label>
+        <textarea id="bookmarkletCode" readonly onclick="this.select()" class="textarea-code"></textarea>
+        <button class="btn secondary mt-8" onclick="copyBookmarkletCode()">Copy</button>
+        <span id="copyStatus" role="status" aria-live="polite" class="inline-status"></span>
       </div>
     </details>
-    <p style="font-size:13px;color:#5a5f57;margin-top:14px">
+    <p class="hint mt-14">
       <strong>To use it:</strong> open your Club Automation schedule (Tools &rarr; Staff Scheduling), click the button, then
       paste what it copies below.
     </p>
@@ -314,42 +55,42 @@
 
   <section>
     <h2>2. Paste your schedule</h2>
-    <p style="font-size:13px;color:#5a5f57;margin-top:0">
+    <p class="hint mt-0">
       Club Automation only shows one week at a time, so for a multi-week pay period, paste
       each week separately. <strong>Parse</strong> shows a breakdown first (blocked, empty,
       already added) — check it, then <strong>Add to sheet</strong>.
     </p>
-     <details style="margin-top:12px">
+     <details class="mt-12">
       <summary>No bookmarklet?</summary>
-      <div style="font-size:13px;color:#5a5f57;margin-top:10px;line-height:1.6">
-        <ol style="padding-left:18px">
+      <div class="detail-body">
+        <ol class="pl-18">
           <li>Right-click page and choose <strong>Inspect</strong> (or press <strong>Ctrl+Shift+I</strong>).</li>
           <li>In the Elements panel, find the <code>&lt;div id="court_schedule"&gt;</code> element.</li>
           <li>Right-click it and choose <strong>Copy</strong> &rarr; <strong>Copy outerHTML</strong>.</li>
         </ol>
       </div>
     </details>
-    <label for="htmlInput" style="display:block;font-size:12px;margin-top:14px;margin-bottom:4px">Schedule HTML</label>
+    <label for="htmlInput" class="field-label mt-14 mb-4">Schedule HTML</label>
     <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
     <div class="row">
       <button class="btn" onclick="runParse()">Parse</button>
-      <button class="btn" id="confirmAddBtn" style="display:none" onclick="confirmAdd()">Add to sheet</button>
+      <button class="btn hidden" id="confirmAddBtn" onclick="confirmAdd()">Add to sheet</button>
     </div>
-    <div id="parseStatus" class="row" role="status" aria-live="polite" style="font-family:var(--mono);font-size:12px;color:#5a5f57"></div>
+    <div id="parseStatus" class="row status-text" role="status" aria-live="polite"></div>
   </section>
 
   <section>
-    <h2>3. Your settings <span style="text-transform:none;letter-spacing:0">(remembered next time you come back)</span></h2>
+    <h2>3. Your settings <span class="text-normal">(remembered next time you come back)</span></h2>
     <div class="row">
-      <label for="coachName" style="font-family:var(--mono);font-size:12px">Name on sheet</label>
-      <input id="coachName" type="text" style="padding:7px 9px;border:1px solid var(--line);font-family:var(--mono);font-size:12px;min-width:220px">
+      <label for="coachName" class="field-label-inline">Name on sheet</label>
+      <input id="coachName" type="text" class="text-input input-wide">
     </div>
 
     <details open>
       <summary>Pay rates</summary>
       <div class="config-grid" id="rateRows"></div>
-      <button class="btn secondary" style="margin-top:6px" onclick="addRateRow()">+ add a rate</button>
-      <p style="font-size:12px;color:var(--dim);margin-top:8px">
+      <button class="btn secondary mt-6" onclick="addRateRow()">+ add a rate</button>
+      <p class="hint-sm mt-8">
         Type a word from your booking titles (like "PL" or "Drill"), choose
         <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
         match wins, so put specific rows above general ones. <strong>Per-person split</strong> is
@@ -358,27 +99,27 @@
       </p>
       <div id="ratesDirtyBanner" role="status" aria-live="polite">
         <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
-        <button class="btn" style="padding:6px 12px;font-size:12px" onclick="reapplyRatesToSheet()">Update timesheet</button>
-        <div id="updateTimesheetStatus" class="row" role="status" aria-live="polite" style="font-family:var(--mono);font-size:12px;color:#5a5f57"></div>
+        <button class="btn btn-compact" onclick="reapplyRatesToSheet()">Update timesheet</button>
+        <div id="updateTimesheetStatus" class="row status-text" role="status" aria-live="polite"></div>
       </div>
     </details>
 
     <details open>
       <summary>Compensation summary (optional)</summary>
-      <p style="font-size:12px;color:var(--dim);margin:8px 0">
+      <p class="hint-sm my-8">
         Paste your contract's rate bullets here — same list you'd copy from a Word doc or PDF.
         Shows up at the bottom of your sheet, on screen and in the download.
       </p>
-      <label for="compNotes" style="display:block;font-size:12px;margin-bottom:4px">Compensation notes</label>
+      <label for="compNotes" class="field-label mb-4">Compensation notes</label>
       <textarea id="compNotes" placeholder="e.g.
 $45/hr on private lessons
 $40/hr on programmed groups, drills, classes"
-        style="width:100%;min-height:110px;font-family:var(--mono);font-size:12px;padding:10px;border:1px solid var(--line);background:#fcfbf8"
+        class="textarea-sm"
         onchange="state.compNotes=this.value;saveSettings();if(lastResult)renderResults();"></textarea>
     </details>
   </section>
 
-  <section id="resultsSection" style="display:none">
+  <section id="resultsSection" class="hidden">
     <h2>4. Timesheet</h2>
     <div id="results"></div>
     <div class="actions">
@@ -502,7 +243,7 @@ function renderRates() {
           onchange="state.rates[${i}].agapeCut=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">= $${net.toFixed(2)}/hr to you</span>
         <span class="rate-x">&middot;</span>
-        <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type" aria-label="Default number of people for this booking type"
+        <input value="${r.defaultPeople ?? 1}" type="number" min="1" class="w-40" title="Default # people for this booking type" aria-label="Default number of people for this booking type"
           onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();renderRates();markRatesDirty();">
         <span class="rate-suffix">people</span>
       `;
@@ -516,7 +257,7 @@ function renderRates() {
           onchange="state.rates[${i}].rate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">/hr to you</span>
         <span class="rate-x">&middot;</span>
-        <input value="${r.defaultPeople ?? 1}" type="number" min="1" style="width:40px" title="Default # people for this booking type" aria-label="Default number of people for this booking type"
+        <input value="${r.defaultPeople ?? 1}" type="number" min="1" class="w-40" title="Default # people for this booking type" aria-label="Default number of people for this booking type"
           onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();renderRates();markRatesDirty();">
         <span class="rate-suffix">people</span>
       `;
@@ -659,7 +400,7 @@ function refreshRateStatusOnEdit() {
 // ---------------------------------------------------------------------
 function markRatesDirty() {
   const banner = document.getElementById('ratesDirtyBanner');
-  if (banner) banner.style.display = lastResult && lastResult.shifts.length > 0 ? 'flex' : 'none';
+  if (banner) banner.classList.toggle('banner-visible', lastResult && lastResult.shifts.length > 0);
   refreshRateStatusOnEdit();
 }
 function reapplyRatesToSheet() {
@@ -681,7 +422,7 @@ function reapplyRatesToSheet() {
   updateTimesheetStatus.textContent = 'Timesheet updated.';
   updateTimesheetStatus.className = 'status-ok';
   const banner = document.getElementById('ratesDirtyBanner');
-  if (banner) banner.style.display = 'none';
+  if (banner) banner.classList.remove('banner-visible');
 }
 
 function escapeHtml(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -985,7 +726,7 @@ function runParse() {
   const status = document.getElementById('parseStatus');
   status.dataset.rateError = '';
   const confirmBtn = document.getElementById('confirmAddBtn');
-  confirmBtn.style.display = 'none';
+  confirmBtn.classList.add('hidden');
   pendingShifts = null;
   pendingSummary = null;
 
@@ -1047,7 +788,7 @@ function runParse() {
 
   if (pendingSummary.toAdd > 0) {
     confirmBtn.textContent = `Add ${pendingSummary.toAdd} entr${pendingSummary.toAdd === 1 ? 'y' : 'ies'} to sheet`;
-    confirmBtn.style.display = '';
+    confirmBtn.classList.remove('hidden');
   }
 }
 
@@ -1062,7 +803,7 @@ function confirmAdd() {
   status.textContent = `Added. Sheet now has ${lastResult.shifts.length} total entries.`;
   status.className = 'status-ok';
   status.dataset.rateError = '';
-  document.getElementById('confirmAddBtn').style.display = 'none';
+  document.getElementById('confirmAddBtn').classList.add('hidden');
   document.getElementById('htmlInput').value = '';
   pendingShifts = null;
   pendingSummary = null;
@@ -1084,13 +825,13 @@ function clearAll() {
     const updateTimesheetStatus = document.getElementById('updateTimesheetStatus');
     if (updateTimesheetStatus) { updateTimesheetStatus.textContent = ''; updateTimesheetStatus.className = ''; updateTimesheetStatus.dataset.rateError = ''; }
     const confirmBtn = document.getElementById('confirmAddBtn');
-    if (confirmBtn) confirmBtn.style.display = 'none';
+    if (confirmBtn) confirmBtn.classList.add('hidden');
     const resultsSection = document.getElementById('resultsSection');
-    if (resultsSection) resultsSection.style.display = 'none';
+    if (resultsSection) resultsSection.classList.add('hidden');
     const results = document.getElementById('results');
     if (results) results.innerHTML = '';
     const dirtyBanner = document.getElementById('ratesDirtyBanner');
-    if (dirtyBanner) dirtyBanner.style.display = 'none';
+    if (dirtyBanner) dirtyBanner.classList.remove('banner-visible');
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* cosmetic only, ignore */ }
   } catch (err) {
     alert('Something went wrong clearing the sheet. Try reloading the page.');
@@ -1237,7 +978,7 @@ function renderResults() {
   const { shifts, name } = lastResult;
   const section = document.getElementById('resultsSection');
   const el = document.getElementById('results');
-  section.style.display = 'block';
+  section.classList.remove('hidden');
 
   const { byLocation, grandTotal } = computeGroups(shifts);
   lastResult.grandTotal = grandTotal;
@@ -1265,7 +1006,7 @@ function renderResults() {
     rows.forEach(r => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
-      const peopleCell = `<input type="number" min="0" class="cell-input" style="width:50px" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
+      const peopleCell = `<input type="number" min="0" class="cell-input w-50" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
              onchange="setShiftPeople(${r.id}, this.value)">${maxHint}`;
       const locCell = loc === 'Unassigned'
         ? `<input list="locOptions" class="cell-input" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
@@ -1273,18 +1014,18 @@ function renderResults() {
         : '';
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
       html += `<tr>
-        <td><input type="date" class="cell-input" style="width:130px" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
-        <td><input class="cell-input" style="width:100%;min-width:160px" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
+        <td><input type="date" class="cell-input w-130" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
+        <td><input class="cell-input cell-input-wide" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
         <td>
-          <input type="time" class="cell-input" style="width:100px" value="${escapeHtml(r.startTime || '')}" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">
+          <input type="time" class="cell-input w-100" value="${escapeHtml(r.startTime || '')}" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">
           <span aria-hidden="true">&ndash;</span>
-          <input type="time" class="cell-input" style="width:100px" value="${escapeHtml(r.endTime || '')}" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">
+          <input type="time" class="cell-input w-100" value="${escapeHtml(r.endTime || '')}" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">
         </td>
         <td>${rateLabelFor(r.rule)}</td>
         <td>${peopleCell}</td>
         ${loc === 'Unassigned' ? `<td>${locCell}</td>` : ''}
         <td class="num">
-          <input class="cell-input amount-input" type="number" step="0.01" style="width:70px;text-align:right;${overridden ? 'color:var(--warn);font-weight:600' : ''}"
+          <input class="cell-input amount-input${overridden ? ' amount-overridden' : ''}" type="number" step="0.01"
             value="${amountFor(r).toFixed(2)}" aria-label="Amount${overridden ? ', manually overridden' : ''}" onchange="setShiftAmount(${r.id}, this.value)">
           ${overridden ? `<button class="reset-btn" title="Reset to calculated amount" aria-label="Reset amount to calculated value" onclick="resetShiftAmount(${r.id})">&#8635;</button>` : ''}
         </td>
