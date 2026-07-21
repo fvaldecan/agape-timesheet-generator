@@ -128,6 +128,13 @@ it, and everything they enter stays local to their browser (see above).
   is unassigned, and exporting with unassigned entries asks for
   confirmation first. Group class titles ending in "- FV" / "- CM" still
   get their location guessed from that suffix, still editable if wrong.
+- **Booking titles that don't match any rate rule are flagged, not
+  silently zeroed.** If nothing in Settings matches a booking's title,
+  it's priced at $0.00 rather than guessing — but that row is marked "No
+  rate matched" (in place of a dollar figure) both on screen and in every
+  export, a warning banner calls out the count, and exporting asks for
+  confirmation first. Fix it by adding a rate rule that matches, or by
+  editing the row's Type of class text.
 - **Group class headcount isn't in the calendar data**, so it can't be
   auto-detected. Any rate rule set to "Per-person split" shows an editable
   headcount field per session. Hourly rules also show an editable "#

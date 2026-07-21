@@ -184,6 +184,7 @@ summary {
 td .dim { color: var(--dim); }
 .amount-input { display: inline-block; width: 70px; text-align: right; }
 .amount-input.amount-overridden { color: var(--warn); font-weight: 600; }
+.rate-unmatched { color: var(--warn); font-weight: 600; font-style: italic; }
 .reset-btn {
   background: none; border: none; cursor: pointer; color: var(--warn);
   font-size: 13px; margin-left: 2px; padding: 0 2px;
