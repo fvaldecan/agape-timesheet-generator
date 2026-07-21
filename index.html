@@ -275,7 +275,7 @@
   </header>
 
   <section>
-    <h2>1. Set up the "Get My Schedule" button (one time only)</h2>
+    <h2>1. Set up the "Get My Schedule" bookmarklet/button (one time only)</h2>
     <p style="font-size:13px;color:#5a5f57;margin-top:0">
       Grabs your schedule automatically — no more copying it by hand.
     </p>
@@ -307,7 +307,7 @@
       </div>
     </details>
     <p style="font-size:13px;color:#5a5f57;margin-top:14px">
-      <strong>To use it:</strong> open your Club Automation schedule, click the button, then
+      <strong>To use it:</strong> open your Club Automation schedule (Tools &rarr; Staff Scheduling), click the button, then
       paste what it copies below.
     </p>
   </section>
@@ -318,10 +318,18 @@
       Club Automation only shows one week at a time, so for a multi-week pay period, paste
       each week separately. <strong>Parse</strong> shows a breakdown first (blocked, empty,
       already added) — check it, then <strong>Add to sheet</strong>.
-      (No bookmarklet: right-click the schedule &rarr; Inspect &rarr; find
-      <code>&lt;div id="court_schedule"&gt;</code> &rarr; Copy &rarr; Copy outerHTML.)
     </p>
-    <label for="htmlInput" style="display:block;font-size:12px;margin-bottom:4px">Schedule HTML</label>
+     <details style="margin-top:12px">
+      <summary>No bookmarklet?</summary>
+      <div style="font-size:13px;color:#5a5f57;margin-top:10px;line-height:1.6">
+        <ol style="padding-left:18px">
+          <li>Right-click page and choose <strong>Inspect</strong> (or press <strong>Ctrl+Shift+I</strong>).</li>
+          <li>In the Elements panel, find the <code>&lt;div id="court_schedule"&gt;</code> element.</li>
+          <li>Right-click it and choose <strong>Copy</strong> &rarr; <strong>Copy outerHTML</strong>.</li>
+        </ol>
+      </div>
+    </details>
+    <label for="htmlInput" style="display:block;font-size:12px;margin-top:14px;margin-bottom:4px">Schedule HTML</label>
     <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
     <div class="row">
       <button class="btn" onclick="runParse()">Parse</button>
@@ -355,7 +363,7 @@
       </div>
     </details>
 
-    <details>
+    <details open>
       <summary>Compensation summary (optional)</summary>
       <p style="font-size:12px;color:var(--dim);margin:8px 0">
         Paste your contract's rate bullets here — same list you'd copy from a Word doc or PDF.
