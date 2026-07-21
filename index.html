@@ -332,8 +332,8 @@
     <label for="htmlInput" style="display:block;font-size:12px;margin-top:14px;margin-bottom:4px">Schedule HTML</label>
     <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
     <div class="row">
-      <button class="btn" onclick="runParse()">Parse</button>
-      <button class="btn" id="confirmAddBtn" style="display:none" onclick="confirmAdd()">Add to sheet</button>
+      <button class="btn" onclick="runParse()" data-goatcounter-click='{"path":"click-parse","title":"Parse schedule","event":true}'>Parse</button>
+      <button class="btn" id="confirmAddBtn" style="display:none" onclick="confirmAdd()" data-goatcounter-click='{"path":"click-add-to-sheet","title":"Add to sheet","event":true}'>Add to sheet</button>
     </div>
     <div id="parseStatus" class="row" role="status" aria-live="polite" style="font-family:var(--mono);font-size:12px;color:#5a5f57"></div>
   </section>
@@ -382,9 +382,9 @@ $40/hr on programmed groups, drills, classes"
     <h2>4. Timesheet</h2>
     <div id="results"></div>
     <div class="actions">
-      <button class="btn" onclick="printTimesheet()">Print / Save as PDF</button>
-      <button class="btn secondary" onclick="downloadDocx()">Download .docx</button>
-      <button class="btn secondary" onclick="downloadCsv()">Download .csv</button>
+      <button class="btn" onclick="printTimesheet()" data-goatcounter-click='{"path":"click-print","title":"Print / Save as PDF","event":true}'>Print / Save as PDF</button>
+      <button class="btn secondary" onclick="downloadDocx()" data-goatcounter-click='{"path":"click-download-docx","title":"Download .docx","event":true}'>Download .docx</button>
+      <button class="btn secondary" onclick="downloadCsv()" data-goatcounter-click='{"path":"click-download-csv","title":"Download .csv","event":true}'>Download .csv</button>
       <button class="btn secondary" onclick="clearAll()">Clear &amp; start over</button>
     </div>
   </section>
@@ -1492,5 +1492,19 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 </script>
+
+<!--
+  Usage analytics — GoatCounter (goatcounter.com), a free, open-source,
+  cookie-free pageview/click counter. Only records anonymized aggregate
+  visit counts and which buttons below get clicked (see the
+  data-goatcounter-click attributes above) — never the schedule HTML,
+  rate settings, or anything a coach types in, all of which still stay
+  local to their own browser (see README).
+
+  Before this goes live, sign up free at https://www.goatcounter.com/
+  and replace YOURCODE below with your site code from Settings → Site.
+-->
+<script data-goatcounter="https://YOURCODE.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>
