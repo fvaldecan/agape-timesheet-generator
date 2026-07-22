@@ -586,6 +586,16 @@ function locationHint(title) {
   if (!m) return null;
   return m[1].toUpperCase() === 'FV' ? 'Fountain Valley' : 'Costa Mesa';
 }
+// Club Automation's Service field comes through as a full word ("Pickleball",
+// "Tennis") — reviewers want the shorthand Club Automation itself uses
+// elsewhere (its court names are "PBall Court #", "Tennis Court #"). Unknown
+// services pass through unchanged rather than getting mangled.
+function sportLabel(raw) {
+  const s = (raw || '').trim().toLowerCase();
+  if (s === 'pickleball') return 'PBALL';
+  if (s === 'tennis') return 'TENNIS';
+  return (raw || '').trim();
+}
 
 // Parses the balloon popup HTML Club Automation returns when you click an
 // event (see BOOKMARKLET.md for how this gets captured). Not wired up to
@@ -630,7 +640,7 @@ function buildShifts(events) {
       return;
     }
     // Open/unbooked slots show as "PL: <coach's last name>" with no client name — not a real lesson.
-    if (e.rawTitle.startsWith('PL') && !e.client) {
+    if ((e.rawTitle.includes('GL') || e.rawTitle.includes('PL')) && !e.client) {
       excluded.emptySlots.push(e);
       return;
     }
@@ -657,6 +667,7 @@ function buildShifts(events) {
       durationHrs: e.durationHrs,
       rule,                 // snapshot of the matched rate rule at parse time
       location,             // null = unassigned, needs manual pick
+      sport: sportLabel(e.detailService),  // from the click-to-fetch detail; blank if unavailable
       numPeople: defaultPeople,
       attendanceMax: e.detailAttendanceMax ?? null,  // just a helpful hint, not used in pay math
       manualAmount: null,   // set when the coach overrides the computed amount
@@ -864,6 +875,12 @@ function setShiftLocation(id, value) {
   shift.location = value.trim() || null;
   renderResults();
 }
+function setShiftSport(id, value) {
+  const shift = lastResult.shifts.find(s => s.id === id);
+  if (!shift) return;
+  shift.sport = value.trim();
+  renderResults();
+}
 function setShiftPeople(id, value) {
   const shift = lastResult.shifts.find(s => s.id === id);
   if (!shift) return;
@@ -926,6 +943,7 @@ function addManualShift() {
     durationHrs: 0,
     rule: { match: '', type: 'hourly', mode: 'flat', rate: 0 },
     location: null,
+    sport: '',
     numPeople: 1,
     manualAmount: null,
   });
@@ -936,6 +954,12 @@ function knownLocations() {
   const set = new Set((lastResult ? lastResult.shifts : []).map(s => s.location).filter(Boolean));
   set.add('Fountain Valley');
   set.add('Costa Mesa');
+  return [...set];
+}
+function knownSports() {
+  const set = new Set((lastResult ? lastResult.shifts : []).map(s => s.sport).filter(Boolean));
+  set.add('TENNIS');
+  set.add('PBALL');
   return [...set];
 }
 
@@ -1019,6 +1043,7 @@ function renderResults() {
   });
 
   let html = `<datalist id="locOptions">${knownLocations().map(l => `<option value="${escapeHtml(l)}">`).join('')}</datalist>`;
+  html += `<datalist id="sportOptions">${knownSports().map(s => `<option value="${escapeHtml(s)}">`).join('')}</datalist>`;
   const unassignedCount = (byLocation['Unassigned'] || []).length;
   const unmatchedRateCount = shifts.filter(s => !s.rule.match).length;
 
@@ -1033,10 +1058,12 @@ function renderResults() {
     const rows = byLocation[loc];
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
-    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Time</th><th scope="col">Hourly Wage of Employee for each class</th><th scope="col"># people</th><th scope="col">Location</th><th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
+    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Sport</th><th scope="col">Time</th><th scope="col">Hourly Wage of Employee for each class</th><th scope="col"># people</th><th scope="col">Location</th><th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
     rows.forEach(r => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
+      const sportCell = `<input list="sportOptions" class="cell-input" value="${escapeHtml(r.sport || '')}" placeholder="sport..." aria-label="Sport, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
+             onchange="setShiftSport(${r.id}, this.value)">`;
       const peopleCell = `<input type="number" min="0" class="cell-input w-50" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
              onchange="setShiftPeople(${r.id}, this.value)">${maxHint}`;
       const locCell = `<input list="locOptions" class="cell-input" value="${escapeHtml(r.location || '')}" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
@@ -1045,6 +1072,7 @@ function renderResults() {
       html += `<tr>
         <td><input type="date" class="cell-input w-130" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
         <td><input class="cell-input cell-input-wide" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
+        <td>${sportCell}</td>
         <td>
           <input type="time" class="cell-input w-100" value="${escapeHtml(r.startTime || '')}" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">
           <span aria-hidden="true">&ndash;</span>
@@ -1061,7 +1089,7 @@ function renderResults() {
         <td><button class="row-del" title="Remove this line" aria-label="Delete this row (${escapeHtml(r.type) || 'blank'} on ${dateDisplay})" onclick="deleteShift(${r.id})">&times;</button></td>
       </tr>`;
     });
-    html += `<tr class="subtotal-row"><td colspan="6">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
+    html += `<tr class="subtotal-row"><td colspan="7">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
     html += `</table>`;
   });
 
@@ -1104,13 +1132,13 @@ function downloadCsv() {
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   let csv = `Name,"${lastResult.name.replace(/"/g, '""')}"\n`;
   csv += `Date,${formatDateDisplay(todayIso())}\n\n`;
-  csv += 'Location,Date,Type of Class,Time,Rate,# People,Amount\n';
+  csv += 'Location,Date,Type of Class,Sport,Time,Rate,# People,Amount\n';
   Object.entries(byLocation).forEach(([loc, rows]) => {
     rows.forEach(r => {
-      csv += `"${loc}","${formatDateDisplay(r.date)}","${r.type.replace(/"/g, '""')}","${formatTimeRange(r.startTime, r.endTime)}","${hourlyWageLabel(r)}",${r.numPeople ?? ''},${amountFor(r).toFixed(2)}\n`;
+      csv += `"${loc}","${formatDateDisplay(r.date)}","${r.type.replace(/"/g, '""')}","${(r.sport || '').replace(/"/g, '""')}","${formatTimeRange(r.startTime, r.endTime)}","${hourlyWageLabel(r)}",${r.numPeople ?? ''},${amountFor(r).toFixed(2)}\n`;
     });
   });
-  csv += `,,,,,TOTAL,${grandTotal.toFixed(2)}\n`;
+  csv += `,,,,,,TOTAL,${grandTotal.toFixed(2)}\n`;
 
   const compLines = parseBulletLines(state.compNotes);
   if (compLines.length > 0) {
@@ -1133,10 +1161,10 @@ async function downloadDocx() {
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, ShadingType } = docx;
-  const colWidths = [1300, 3600, 1800, 1500, 1000, 1400];
+  const colWidths = [1300, 2600, 1000, 1800, 1500, 1000, 1400];
 
   const headerRow = new TableRow({
-    children: ['Date', 'Type of Class', 'Time', 'Hourly Wage of Employee for each class', '# People', 'Amount'].map((label, i) => new TableCell({
+    children: ['Date', 'Type of Class', 'Sport', 'Time', 'Hourly Wage of Employee for each class', '# People', 'Amount'].map((label, i) => new TableCell({
       width: { size: colWidths[i], type: WidthType.DXA },
       shading: { type: ShadingType.CLEAR, fill: 'D9D9D9' },
       children: [new Paragraph({ children: [new TextRun({ text: label, bold: true })] })],
@@ -1155,18 +1183,18 @@ async function downloadDocx() {
 
     const dataRows = rows.map(r => {
       return new TableRow({
-        children: [formatDateDisplay(r.date), r.type, formatTimeRange(r.startTime, r.endTime), hourlyWageLabel(r), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].map((val, i) => new TableCell({
+        children: [formatDateDisplay(r.date), r.type, r.sport || '', formatTimeRange(r.startTime, r.endTime), hourlyWageLabel(r), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].map((val, i) => new TableCell({
           width: { size: colWidths[i], type: WidthType.DXA },
-          children: [new Paragraph({ alignment: i >= 4 ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: String(val) })] })],
+          children: [new Paragraph({ alignment: i >= 5 ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: String(val) })] })],
         })),
       });
     });
 
     const subtotalRow = new TableRow({
       children: [
-        new TableCell({ width: { size: colWidths[0]+colWidths[1]+colWidths[2]+colWidths[3]+colWidths[4], type: WidthType.DXA }, columnSpan: 5,
+        new TableCell({ width: { size: colWidths[0]+colWidths[1]+colWidths[2]+colWidths[3]+colWidths[4]+colWidths[5], type: WidthType.DXA }, columnSpan: 6,
           children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Subtotal:', bold: true })] })] }),
-        new TableCell({ width: { size: colWidths[5], type: WidthType.DXA },
+        new TableCell({ width: { size: colWidths[6], type: WidthType.DXA },
           children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: `$${subtotal.toFixed(2)}`, bold: true })] })] }),
       ],
     });
@@ -1222,18 +1250,19 @@ function printTimesheet() {
   Object.entries(byLocation).forEach(([loc, rows]) => {
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="print-loc">${escapeHtml(loc.toUpperCase())}</div>`;
-    html += `<table class="print-table"><tr><th>Date</th><th>Type of Class</th><th>Time</th><th>Hourly Wage of Employee for each class</th><th class="num"># People</th><th class="num">Amount</th></tr>`;
+    html += `<table class="print-table"><tr><th>Date</th><th>Type of Class</th><th>Sport</th><th>Time</th><th>Hourly Wage of Employee for each class</th><th class="num"># People</th><th class="num">Amount</th></tr>`;
     rows.forEach(r => {
       html += `<tr>
         <td>${escapeHtml(formatDateDisplay(r.date))}</td>
         <td>${escapeHtml(r.type)}</td>
+        <td>${escapeHtml(r.sport || '')}</td>
         <td>${escapeHtml(formatTimeRange(r.startTime, r.endTime))}</td>
         <td>${escapeHtml(hourlyWageLabel(r))}</td>
         <td class="num">${r.numPeople ?? '—'}</td>
         <td class="num">$${amountFor(r).toFixed(2)}</td>
       </tr>`;
     });
-    html += `<tr class="print-subtotal"><td colspan="5">Subtotal:</td><td>$${subtotal.toFixed(2)}</td></tr>`;
+    html += `<tr class="print-subtotal"><td colspan="6">Subtotal:</td><td>$${subtotal.toFixed(2)}</td></tr>`;
     html += `</table>`;
   });
 
