@@ -199,6 +199,11 @@ summary {
    divider under just the Date cell — mirrors the "no line inside a merged
    cell" look of the real rowspan merge in the docx/print exports. */
 .date-no-border { border-bottom: none; }
+/* Time cell for a shift with a bad time order or an overlap against
+   another shift (see computeConflictIds() in index.html) — same warn
+   visual language as .field-missing uses for incomplete rate rows, so a
+   long sheet's flagged row(s) are findable without hunting. */
+.time-conflict { background: var(--warn-dim); border-left: 3px solid var(--warn); }
 td .dim { color: var(--dim); }
 .amount-input { display: inline-block; width: 70px; text-align: right; }
 .amount-input.amount-overridden { color: var(--warn); font-weight: 600; }

@@ -751,6 +751,49 @@ function dateRunInfo(rows) {
   return info;
 }
 
+// A shift is a bad time order when both times are set and end <= start —
+// real lessons are always same-day, so this almost always means a
+// data-entry mistake (e.g. picking AM instead of PM) rather than a genuine
+// overnight session, even though hoursBetween() still computes a (wrong)
+// duration for it rather than blocking anything.
+function shiftHasBadTimeOrder(s) {
+  if (!s.startTime || !s.endTime) return false;
+  return s.endTime <= s.startTime;
+}
+
+// Flags shifts whose date+time range overlaps another shift's, anywhere on
+// the sheet — not just within the same location group, since one coach
+// can't actually teach two lessons at once regardless of which court each
+// is booked at. Times are canonical zero-padded "HH:MM" strings, so plain
+// string comparison already matches time order — no need to parse them.
+// Uses half-open interval overlap (max(start) < min(end)) so back-to-back
+// sessions (one ends exactly when the next starts) never trigger a false
+// positive; that's normal scheduling, not a conflict. Shifts already
+// flagged as a bad time order are excluded from the overlap check — their
+// range doesn't mean anything meaningful to compare.
+function computeConflictIds(shifts) {
+  const badOrderIds = new Set();
+  const overlapIds = new Set();
+  const usable = [];
+  shifts.forEach(s => {
+    if (shiftHasBadTimeOrder(s)) { badOrderIds.add(s.id); return; }
+    if (s.date && s.startTime && s.endTime) usable.push(s);
+  });
+  for (let i = 0; i < usable.length; i++) {
+    for (let j = i + 1; j < usable.length; j++) {
+      const a = usable[i], b = usable[j];
+      if (a.date !== b.date) continue;
+      const overlapStart = a.startTime > b.startTime ? a.startTime : b.startTime;
+      const overlapEnd = a.endTime < b.endTime ? a.endTime : b.endTime;
+      if (overlapStart < overlapEnd) {
+        overlapIds.add(a.id);
+        overlapIds.add(b.id);
+      }
+    }
+  }
+  return { badOrderIds, overlapIds };
+}
+
 // ---------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------
@@ -1098,12 +1141,19 @@ function renderResults() {
   html += `<datalist id="sportOptions">${knownSports().map(s => `<option value="${escapeHtml(s)}">`).join('')}</datalist>`;
   const unassignedCount = (byLocation['Unassigned'] || []).length;
   const unmatchedRateCount = shifts.filter(s => !s.rule.match).length;
+  const { badOrderIds, overlapIds } = computeConflictIds(shifts);
 
   if (unmatchedRateCount > 0) {
     html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unmatchedRateCount} entr${unmatchedRateCount === 1 ? 'y has' : 'ies have'} no matching rate rule</strong> — showing $0.00, marked "No rate matched" below. Add a rate rule in Settings, or fix the row's Type of class text so it matches one.</div>`;
   }
   if (unassignedCount > 0) {
     html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unassignedCount} entr${unassignedCount === 1 ? 'y needs' : 'ies need'} a location</strong> — pick one per row below in UNASSIGNED.</div>`;
+  }
+  if (badOrderIds.size > 0) {
+    html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${badOrderIds.size} entr${badOrderIds.size === 1 ? 'y has' : 'ies have'} an end time before its start time</strong> — highlighted below. Likely an AM/PM mix-up.</div>`;
+  }
+  if (overlapIds.size > 0) {
+    html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${overlapIds.size} entr${overlapIds.size === 1 ? 'y overlaps' : 'ies overlap'} another entry's time</strong> — highlighted below. Just double check before exporting.</div>`;
   }
 
   locOrder.forEach(loc => {
@@ -1133,11 +1183,18 @@ function renderResults() {
       const locCell = `<input list="locOptions" class="cell-input" value="${escapeHtml(r.location || '')}" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
              onchange="setShiftLocation(${r.id}, this.value)">`;
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
+      // A row's Time cell gets highlighted (not the whole row) so a long
+      // sheet's flagged entries are findable at a glance — bad time order
+      // takes priority over overlap in the tooltip since it's the more
+      // actionable/unambiguous of the two.
+      const timeConflictTitle = badOrderIds.has(r.id) ? 'End time is before start time'
+        : overlapIds.has(r.id) ? 'Overlaps another entry\'s time' : '';
+      const timeCellAttrs = timeConflictTitle ? ` class="time-conflict" title="${timeConflictTitle}"` : '';
       html += `<tr>
         <td${dateCellClass}><input type="date" class="cell-input w-130" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
         <td><input class="cell-input cell-input-wide" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
         <td>${sportCell}</td>
-        <td>
+        <td${timeCellAttrs}>
           <select class="cell-input w-100" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">${timeOptionsHtml(r.startTime)}</select>
           <span aria-hidden="true">&ndash;</span>
           <select class="cell-input w-100" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">${timeOptionsHtml(r.endTime)}</select>
@@ -1187,11 +1244,23 @@ function confirmUnmatchedRateExport() {
   const n = lastResult.shifts.filter(s => !s.rule.match).length;
   return confirm(`${n} entr${n === 1 ? 'y has' : 'ies have'} no matching rate rule and will show $0.00. Export anyway?`);
 }
+function hasTimeConflict() {
+  if (!lastResult) return false;
+  const { badOrderIds, overlapIds } = computeConflictIds(lastResult.shifts);
+  return badOrderIds.size > 0 || overlapIds.size > 0;
+}
+function confirmTimeConflictExport() {
+  if (!hasTimeConflict()) return true;
+  const { badOrderIds, overlapIds } = computeConflictIds(lastResult.shifts);
+  const n = badOrderIds.size + overlapIds.size;
+  return confirm(`${n} entr${n === 1 ? 'y has' : 'ies have'} a time conflict (bad order or overlap) — see the highlighted row(s). Export anyway?`);
+}
 
 function downloadCsv() {
   if (!lastResult) return;
   if (!confirmUnassignedExport()) return;
   if (!confirmUnmatchedRateExport()) return;
+  if (!confirmTimeConflictExport()) return;
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   let csv = `Name,"${lastResult.name.replace(/"/g, '""')}"\n`;
@@ -1222,6 +1291,7 @@ async function downloadDocx() {
   }
   if (!confirmUnassignedExport()) return;
   if (!confirmUnmatchedRateExport()) return;
+  if (!confirmTimeConflictExport()) return;
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, ShadingType } = docx;
@@ -1318,6 +1388,7 @@ function printTimesheet() {
   if (!lastResult) return;
   if (!confirmUnassignedExport()) return;
   if (!confirmUnmatchedRateExport()) return;
+  if (!confirmTimeConflictExport()) return;
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
 
