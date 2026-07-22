@@ -630,7 +630,7 @@ function buildShifts(events) {
       return;
     }
     // Open/unbooked slots show as "PL: <coach's last name>" with no client name — not a real lesson.
-    if (e.rawTitle.startsWith('PL') && !e.client) {
+    if ((e.rawTitle.includes('GL') || e.rawTitle.includes('PL')) && !e.client) {
       excluded.emptySlots.push(e);
       return;
     }
@@ -657,6 +657,7 @@ function buildShifts(events) {
       durationHrs: e.durationHrs,
       rule,                 // snapshot of the matched rate rule at parse time
       location,             // null = unassigned, needs manual pick
+      sport: e.detailService || '',  // from the click-to-fetch detail; blank if unavailable
       numPeople: defaultPeople,
       attendanceMax: e.detailAttendanceMax ?? null,  // just a helpful hint, not used in pay math
       manualAmount: null,   // set when the coach overrides the computed amount
@@ -864,6 +865,12 @@ function setShiftLocation(id, value) {
   shift.location = value.trim() || null;
   renderResults();
 }
+function setShiftSport(id, value) {
+  const shift = lastResult.shifts.find(s => s.id === id);
+  if (!shift) return;
+  shift.sport = value.trim();
+  renderResults();
+}
 function setShiftPeople(id, value) {
   const shift = lastResult.shifts.find(s => s.id === id);
   if (!shift) return;
@@ -926,6 +933,7 @@ function addManualShift() {
     durationHrs: 0,
     rule: { match: '', type: 'hourly', mode: 'flat', rate: 0 },
     location: null,
+    sport: '',
     numPeople: 1,
     manualAmount: null,
   });
@@ -936,6 +944,12 @@ function knownLocations() {
   const set = new Set((lastResult ? lastResult.shifts : []).map(s => s.location).filter(Boolean));
   set.add('Fountain Valley');
   set.add('Costa Mesa');
+  return [...set];
+}
+function knownSports() {
+  const set = new Set((lastResult ? lastResult.shifts : []).map(s => s.sport).filter(Boolean));
+  set.add('Tennis');
+  set.add('Pickleball');
   return [...set];
 }
 
