@@ -799,6 +799,23 @@ function computeConflictIds(shifts) {
 // ---------------------------------------------------------------------
 let lastResult = null; // { shifts, name }
 
+// Whether a shift's detail panel is expanded defaults to whether it needs
+// attention (missing location/rate) — but once the coach explicitly
+// toggles a row, that choice sticks across re-renders (e.g. so collapsing
+// a still-broken row to get it out of the way doesn't just spring back
+// open on the next edit). Only an explicit toggle is stored here; rows
+// without an override fall back to the needs-attention default.
+const expandedOverrides = new Map();
+function isShiftExpanded(id, needsAttention) {
+  return expandedOverrides.has(id) ? expandedOverrides.get(id) : needsAttention;
+}
+function toggleShiftExpanded(id) {
+  const shift = lastResult.shifts.find(s => s.id === id);
+  const needsAttention = shift ? (!shift.location || !shift.rule.match) : false;
+  expandedOverrides.set(id, !isShiftExpanded(id, needsAttention));
+  renderResults();
+}
+
 // Fires a single anonymous "a timesheet got made" count the first time any
 // export button is used on the current sheet — repeat downloads or extra
 // formats of the same sheet don't inflate it. Reset only in clearAll(), so
@@ -918,6 +935,7 @@ function clearAll() {
     pendingShifts = null;
     pendingSummary = null;
     hasCountedTimesheetCompletion = false;
+    expandedOverrides.clear();
     const htmlInput = document.getElementById('htmlInput');
     if (htmlInput) htmlInput.value = '';
     const status = document.getElementById('parseStatus');
@@ -1160,58 +1178,72 @@ function renderResults() {
     const rows = byLocation[loc];
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
-    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Sport</th><th scope="col">Time</th><th scope="col">Hourly Wage of Employee for each class</th><th scope="col"># people</th><th scope="col">Location</th><th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
-    const runInfo = dateRunInfo(rows);
-    rows.forEach((r, i) => {
+    rows.forEach(r => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
-      // Rows sharing a date with the row above visually de-emphasize their
-      // repeated date (see .date-repeat in style.css) — the input itself
-      // stays fully independent and editable, this is display-only.
-      // Separately, a row that shares its date with the *next* row drops
-      // the divider under just the Date cell (see .date-no-border) — same
-      // "no line inside a merged cell" look the docx/print rowspan gives,
-      // while every other column (genuinely different per row) keeps its
-      // own divider so distinct lessons stay easy to tell apart.
-      const mergesDown = i < rows.length - 1 && r.date && rows[i + 1].date === r.date;
-      const dateCellClasses = [!runInfo[i].isFirstOfRun && 'date-repeat', mergesDown && 'date-no-border'].filter(Boolean);
-      const dateCellClass = dateCellClasses.length ? ` class="${dateCellClasses.join(' ')}"` : '';
-      const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
-      const sportCell = `<input list="sportOptions" class="cell-input" value="${escapeHtml(r.sport || '')}" placeholder="sport..." aria-label="Sport, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
-             onchange="setShiftSport(${r.id}, this.value)">`;
-      const peopleCell = `<input type="number" min="0" class="cell-input w-50" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
-             onchange="setShiftPeople(${r.id}, this.value)">${maxHint}`;
-      const locCell = `<input list="locOptions" class="cell-input" value="${escapeHtml(r.location || '')}" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
-             onchange="setShiftLocation(${r.id}, this.value)">`;
+      const needsAttention = !r.location || !r.rule.match;
+      const expanded = isShiftExpanded(r.id, needsAttention);
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
-      // A row's Time cell gets highlighted (not the whole row) so a long
-      // sheet's flagged entries are findable at a glance — bad time order
-      // takes priority over overlap in the tooltip since it's the more
-      // actionable/unambiguous of the two.
-      const timeConflictTitle = badOrderIds.has(r.id) ? 'End time is before start time'
-        : overlapIds.has(r.id) ? 'Overlaps another entry\'s time' : '';
-      const timeCellAttrs = timeConflictTitle ? ` class="time-conflict" title="${timeConflictTitle}"` : '';
-      html += `<tr>
-        <td${dateCellClass}><input type="date" class="cell-input w-130" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
-        <td><input class="cell-input cell-input-wide" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
-        <td>${sportCell}</td>
-        <td${timeCellAttrs}>
-          <select class="cell-input w-100" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">${timeOptionsHtml(r.startTime)}</select>
-          <span aria-hidden="true">&ndash;</span>
-          <select class="cell-input w-100" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">${timeOptionsHtml(r.endTime)}</select>
-        </td>
-        <td>${rateLabelFor(r.rule)}</td>
-        <td>${peopleCell}</td>
-        <td>${locCell}</td>
-        <td class="num">
-          <input class="cell-input amount-input${overridden ? ' amount-overridden' : ''}" type="number" step="0.01"
-            value="${amountFor(r).toFixed(2)}" aria-label="Amount${overridden ? ', manually overridden' : ''}" onchange="setShiftAmount(${r.id}, this.value)">
-          ${overridden ? `<button class="reset-btn" title="Reset to calculated amount" aria-label="Reset amount to calculated value" onclick="resetShiftAmount(${r.id})">&#8635;</button>` : ''}
-        </td>
-        <td><button class="row-del" title="Remove this line" aria-label="Delete this row (${escapeHtml(r.type) || 'blank'} on ${dateDisplay})" onclick="deleteShift(${r.id})">&times;</button></td>
-      </tr>`;
+      const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
+
+      html += `<div class="shift-row" onclick="toggleShiftExpanded(${r.id})">
+        <span class="shift-caret" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
+        <span class="shift-date">${dateDisplay}</span>
+        <span class="shift-type">${escapeHtml(r.type) || '(untitled)'}</span>
+        ${needsAttention ? '<span class="shift-warn" title="Needs attention — missing location or rate">&#9888;</span>' : ''}
+        <span class="shift-time">${formatTimeRange(r.startTime, r.endTime)}</span>
+        <span class="shift-amount${overridden ? ' amount-overridden' : ''}">$${amountFor(r).toFixed(2)}</span>
+        <button class="row-del" title="Remove this line" aria-label="Delete this row (${escapeHtml(r.type) || 'blank'} on ${dateDisplay})" onclick="event.stopPropagation(); deleteShift(${r.id})">&times;</button>
+      </div>`;
+
+      if (expanded) {
+        html += `<div class="shift-detail" onclick="event.stopPropagation()">
+          <div class="shift-detail-grid">
+            <div class="field">
+              <label>Date</label>
+              <input type="date" class="cell-input" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)">
+            </div>
+            <div class="field field-wide">
+              <label>Type of class</label>
+              <input class="cell-input" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)">
+            </div>
+            <div class="field">
+              <label>Sport</label>
+              <input list="sportOptions" class="cell-input" value="${escapeHtml(r.sport || '')}" placeholder="sport..." aria-label="Sport, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
+                onchange="setShiftSport(${r.id}, this.value)">
+            </div>
+            <div class="field">
+              <label>Start</label>
+              <select class="cell-input" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">${timeOptionsHtml(r.startTime)}</select>
+            </div>
+            <div class="field">
+              <label>End</label>
+              <select class="cell-input" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">${timeOptionsHtml(r.endTime)}</select>
+            </div>
+            <div class="field">
+              <label>Hourly wage</label>
+              <div class="field-static">${rateLabelFor(r.rule)}</div>
+            </div>
+            <div class="field">
+              <label># people</label>
+              <input type="number" min="0" class="cell-input" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
+                onchange="setShiftPeople(${r.id}, this.value)">${maxHint}
+            </div>
+            <div class="field">
+              <label>Location</label>
+              <input list="locOptions" class="cell-input" value="${escapeHtml(r.location || '')}" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
+                onchange="setShiftLocation(${r.id}, this.value)">
+            </div>
+            <div class="field field-amount">
+              <label>Amount</label>
+              <input class="cell-input amount-input${overridden ? ' amount-overridden' : ''}" type="number" step="0.01"
+                value="${amountFor(r).toFixed(2)}" aria-label="Amount${overridden ? ', manually overridden' : ''}" onchange="setShiftAmount(${r.id}, this.value)">
+              ${overridden ? `<button class="reset-btn" title="Reset to calculated amount" aria-label="Reset amount to calculated value" onclick="resetShiftAmount(${r.id})">&#8635;</button>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }
     });
-    html += `<tr class="subtotal-row"><td colspan="7">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
-    html += `</table>`;
+    html += `<div class="subtotal-line">Subtotal <span class="num">$${subtotal.toFixed(2)}</span></div>`;
   });
 
   html += `<div class="row"><button class="btn secondary" onclick="addManualShift()">+ add line item</button></div>`;
