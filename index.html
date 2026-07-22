@@ -1033,6 +1033,7 @@ function renderResults() {
   });
 
   let html = `<datalist id="locOptions">${knownLocations().map(l => `<option value="${escapeHtml(l)}">`).join('')}</datalist>`;
+  html += `<datalist id="sportOptions">${knownSports().map(s => `<option value="${escapeHtml(s)}">`).join('')}</datalist>`;
   const unassignedCount = (byLocation['Unassigned'] || []).length;
   const unmatchedRateCount = shifts.filter(s => !s.rule.match).length;
 
@@ -1047,10 +1048,12 @@ function renderResults() {
     const rows = byLocation[loc];
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
-    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Time</th><th scope="col">Hourly Wage of Employee for each class</th><th scope="col"># people</th><th scope="col">Location</th><th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
+    html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Sport</th><th scope="col">Time</th><th scope="col">Hourly Wage of Employee for each class</th><th scope="col"># people</th><th scope="col">Location</th><th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
     rows.forEach(r => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
+      const sportCell = `<input list="sportOptions" class="cell-input" value="${escapeHtml(r.sport || '')}" placeholder="sport..." aria-label="Sport, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
+             onchange="setShiftSport(${r.id}, this.value)">`;
       const peopleCell = `<input type="number" min="0" class="cell-input w-50" value="${r.numPeople ?? ''}" placeholder="#" aria-label="Number of people, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
              onchange="setShiftPeople(${r.id}, this.value)">${maxHint}`;
       const locCell = `<input list="locOptions" class="cell-input" value="${escapeHtml(r.location || '')}" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
@@ -1059,6 +1062,7 @@ function renderResults() {
       html += `<tr>
         <td><input type="date" class="cell-input w-130" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
         <td><input class="cell-input cell-input-wide" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
+        <td>${sportCell}</td>
         <td>
           <input type="time" class="cell-input w-100" value="${escapeHtml(r.startTime || '')}" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">
           <span aria-hidden="true">&ndash;</span>
@@ -1075,7 +1079,7 @@ function renderResults() {
         <td><button class="row-del" title="Remove this line" aria-label="Delete this row (${escapeHtml(r.type) || 'blank'} on ${dateDisplay})" onclick="deleteShift(${r.id})">&times;</button></td>
       </tr>`;
     });
-    html += `<tr class="subtotal-row"><td colspan="6">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
+    html += `<tr class="subtotal-row"><td colspan="7">Subtotal</td><td class="num">$${subtotal.toFixed(2)}</td><td></td></tr>`;
     html += `</table>`;
   });
 
