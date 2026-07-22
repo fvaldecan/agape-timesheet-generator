@@ -540,14 +540,21 @@ function parseSchedule(html) {
       ? `${title}: ${subtitle}`
       : (title.startsWith('PL') ? `PL: ${subtitle}` : `${title} ${subtitle}`.trim());
 
+    // Round both onto the 30-minute grid, then re-derive duration from the
+    // rounded pair — see roundToHalfHour() — rather than trusting the raw
+    // data-duration attribute, so pay math always matches the on-grid time
+    // actually shown.
+    const startTimeRounded = roundToHalfHour(timeStr);
+    const endTimeRounded = roundToHalfHour(fmtTime24(end));
+
     events.push({
       date: dateStr,                 // already yyyy-mm-dd from the cell id — canonical form, no conversion needed
       rawTitle: title,
       title: displayTitle,
       client: title.startsWith('PL') ? subtitle : '',
-      startTime: timeStr,            // already 24hr HH:MM from the cell id
-      endTime: fmtTime24(end),
-      durationHrs,
+      startTime: startTimeRounded,
+      endTime: endTimeRounded,
+      durationHrs: hoursBetween(startTimeRounded, endTimeRounded),
       nameCount,                                    // # of names listed on the booking itself (semi-privates etc.)
       detailLocation: detail ? detail.location : null,
       detailAttendance: detail ? detail.attendanceCurrent : null,
@@ -907,6 +914,18 @@ function setShiftPeople(id, value) {
   shift.numPeople = isNaN(n) ? null : n;
   renderResults();
 }
+// Calendar-derived times land on the 30-minute grid the <select> editor
+// (see timeOptionsHtml) offers, even when Club Automation hands us an odd
+// one-off duration (see README "One-off event durations don't always match
+// actual pay") — otherwise a parsed time with no matching <option> would
+// render as blank despite a real value being stored underneath.
+function roundToHalfHour(hhmm) {
+  const m = (hhmm || '').match(/^(\d{2}):(\d{2})$/);
+  if (!m) return hhmm;
+  const totalMin = Number(m[1]) * 60 + Number(m[2]);
+  const rounded = (Math.round(totalMin / 30) * 30) % (24 * 60);
+  return `${String(Math.floor(rounded / 60)).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
+}
 // durationHrs normally comes from real calendar data at parse time, but
 // editing start/end time (manual line items, or fixing a parsed time) has to
 // keep it in sync by hand — otherwise hourly-rate rows stay priced off
@@ -930,6 +949,9 @@ function setShiftField(id, field, value) {
     shift.numPeople = shift.rule.defaultPeople ?? 1;
   }
   if (field === 'startTime' || field === 'endTime') {
+    // No rounding needed here — startTime/endTime now come from a <select>
+    // of half-hour options (see timeOptionsHtml), so an off-grid value
+    // can't reach this function in the first place.
     shift.durationHrs = hoursBetween(shift.startTime, shift.endTime);
   }
   renderResults();
@@ -1037,6 +1059,17 @@ function formatTime12(hhmm) {
   h = h % 12 || 12;
   return `${h}:${min}${ampm}`;
 }
+// Times are edited via a <select> of every half-hour mark rather than a
+// native <input type="time"> — an off-grid value simply isn't one of the
+// options, so there's nothing to round or validate after the fact.
+function timeOptionsHtml(selected) {
+  let html = `<option value=""${selected ? '' : ' selected'}>--:--</option>`;
+  for (let totalMin = 0; totalMin < 24 * 60; totalMin += 30) {
+    const val = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+    html += `<option value="${val}"${val === selected ? ' selected' : ''}>${formatTime12(val)}</option>`;
+  }
+  return html;
+}
 function formatTimeRange(startTime, endTime) {
   const s = formatTime12(startTime);
   const e = formatTime12(endTime);
@@ -1105,9 +1138,9 @@ function renderResults() {
         <td><input class="cell-input cell-input-wide" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
         <td>${sportCell}</td>
         <td>
-          <input type="time" class="cell-input w-100" value="${escapeHtml(r.startTime || '')}" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">
+          <select class="cell-input w-100" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">${timeOptionsHtml(r.startTime)}</select>
           <span aria-hidden="true">&ndash;</span>
-          <input type="time" class="cell-input w-100" value="${escapeHtml(r.endTime || '')}" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">
+          <select class="cell-input w-100" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">${timeOptionsHtml(r.endTime)}</select>
         </td>
         <td>${rateLabelFor(r.rule)}</td>
         <td>${peopleCell}</td>
