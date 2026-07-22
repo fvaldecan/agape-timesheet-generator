@@ -751,6 +751,37 @@ function dateRunInfo(rows) {
   return info;
 }
 
+// Monday-start week key (yyyy-mm-dd of that week's Monday) for the "Week
+// of ..." sub-heading nested inside each location section — purely a
+// display/collapse aid for multi-week sheets. Location stays the primary
+// grouping (it drives subtotals and the docx/print export structure);
+// this only helps a coach orient within a location's rows once a sheet
+// spans more than one week. A blank/unparseable date has no week.
+function weekOf(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(d.getTime())) return null;
+  const day = d.getDay();
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((day + 6) % 7));
+  return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+}
+// rows must already be sorted chronologically (computeGroups guarantees
+// this), so consecutive same-week rows are always adjacent — groups them
+// into an ordered list of { weekStart, rows } without re-sorting.
+function groupByWeek(rows) {
+  const groups = [];
+  let current = null;
+  rows.forEach(r => {
+    const wk = weekOf(r.date);
+    if (!current || current.weekStart !== wk) {
+      current = { weekStart: wk, rows: [] };
+      groups.push(current);
+    }
+    current.rows.push(r);
+  });
+  return groups;
+}
+
 // A shift is a bad time order when both times are set and end <= start —
 // real lessons are always same-day, so this almost always means a
 // data-entry mistake (e.g. picking AM instead of PM) rather than a genuine
@@ -813,6 +844,16 @@ function toggleShiftExpanded(id) {
   const shift = lastResult.shifts.find(s => s.id === id);
   const needsAttention = shift ? (!shift.location || !shift.rule.match) : false;
   expandedOverrides.set(id, !isShiftExpanded(id, needsAttention));
+  renderResults();
+}
+
+// Keyed by `${location}|${weekStart}` so collapsing "week of ..." in one
+// location section doesn't affect the same week in a different location —
+// each location section is otherwise fully independent. Weeks default to
+// expanded; only an explicit collapse is stored.
+const collapsedWeeks = new Set();
+function toggleWeekCollapsed(key) {
+  collapsedWeeks.has(key) ? collapsedWeeks.delete(key) : collapsedWeeks.add(key);
   renderResults();
 }
 
@@ -1178,7 +1219,17 @@ function renderResults() {
     const rows = byLocation[loc];
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
-    rows.forEach(r => {
+    groupByWeek(rows).forEach(({ weekStart, rows: weekRows }) => {
+      const weekKey = `${loc}|${weekStart}`;
+      const weekCollapsed = collapsedWeeks.has(weekKey);
+      const weekSubtotal = weekRows.reduce((s, r) => s + amountFor(r), 0);
+      const weekLabel = weekStart ? `Week of ${formatDateDisplay(weekStart)}` : 'No date';
+      html += `<div class="week-heading" onclick="toggleWeekCollapsed('${weekKey}')">
+        <span>${weekCollapsed ? '&#9656;' : '&#9662;'} ${weekLabel}</span>
+        <span>${weekRows.length} entr${weekRows.length === 1 ? 'y' : 'ies'} &middot; $${weekSubtotal.toFixed(2)}</span>
+      </div>`;
+      if (weekCollapsed) return;
+      weekRows.forEach(r => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
       const needsAttention = !r.location || !r.rule.match;
       const expanded = isShiftExpanded(r.id, needsAttention);
@@ -1242,6 +1293,7 @@ function renderResults() {
           </div>
         </div>`;
       }
+      });
     });
     html += `<div class="subtotal-line">Subtotal <span class="num">$${subtotal.toFixed(2)}</span></div>`;
   });
