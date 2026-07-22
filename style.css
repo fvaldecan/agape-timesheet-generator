@@ -195,6 +195,10 @@ summary {
   border-color: var(--line);
   background: #fffef9;
 }
+/* A row whose date carries into the next row (same day) drops the row
+   divider under just the Date cell — mirrors the "no line inside a merged
+   cell" look of the real rowspan merge in the docx/print exports. */
+.date-no-border { border-bottom: none; }
 td .dim { color: var(--dim); }
 .amount-input { display: inline-block; width: 70px; text-align: right; }
 .amount-input.amount-overridden { color: var(--warn); font-weight: 600; }
