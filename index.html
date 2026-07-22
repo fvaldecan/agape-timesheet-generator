@@ -751,6 +751,49 @@ function dateRunInfo(rows) {
   return info;
 }
 
+// A shift is a bad time order when both times are set and end <= start —
+// real lessons are always same-day, so this almost always means a
+// data-entry mistake (e.g. picking AM instead of PM) rather than a genuine
+// overnight session, even though hoursBetween() still computes a (wrong)
+// duration for it rather than blocking anything.
+function shiftHasBadTimeOrder(s) {
+  if (!s.startTime || !s.endTime) return false;
+  return s.endTime <= s.startTime;
+}
+
+// Flags shifts whose date+time range overlaps another shift's, anywhere on
+// the sheet — not just within the same location group, since one coach
+// can't actually teach two lessons at once regardless of which court each
+// is booked at. Times are canonical zero-padded "HH:MM" strings, so plain
+// string comparison already matches time order — no need to parse them.
+// Uses half-open interval overlap (max(start) < min(end)) so back-to-back
+// sessions (one ends exactly when the next starts) never trigger a false
+// positive; that's normal scheduling, not a conflict. Shifts already
+// flagged as a bad time order are excluded from the overlap check — their
+// range doesn't mean anything meaningful to compare.
+function computeConflictIds(shifts) {
+  const badOrderIds = new Set();
+  const overlapIds = new Set();
+  const usable = [];
+  shifts.forEach(s => {
+    if (shiftHasBadTimeOrder(s)) { badOrderIds.add(s.id); return; }
+    if (s.date && s.startTime && s.endTime) usable.push(s);
+  });
+  for (let i = 0; i < usable.length; i++) {
+    for (let j = i + 1; j < usable.length; j++) {
+      const a = usable[i], b = usable[j];
+      if (a.date !== b.date) continue;
+      const overlapStart = a.startTime > b.startTime ? a.startTime : b.startTime;
+      const overlapEnd = a.endTime < b.endTime ? a.endTime : b.endTime;
+      if (overlapStart < overlapEnd) {
+        overlapIds.add(a.id);
+        overlapIds.add(b.id);
+      }
+    }
+  }
+  return { badOrderIds, overlapIds };
+}
+
 // ---------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------
