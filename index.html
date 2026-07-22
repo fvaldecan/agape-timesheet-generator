@@ -1246,7 +1246,12 @@ function renderResults() {
         <span>${weekRows.length} entr${weekRows.length === 1 ? 'y' : 'ies'} &middot; $${weekSubtotal.toFixed(2)}</span>
       </div>`;
       if (weekCollapsed) return;
-      weekRows.forEach(r => {
+      // Same-day fade is scoped to this week's rows, not the whole location —
+      // a week heading already breaks up the visual sequence, so the first
+      // row of a new week shouldn't fade just because it happens to share a
+      // date with the last row of the week above.
+      const runInfo = dateRunInfo(weekRows);
+      weekRows.forEach((r, i) => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
       const conflictIds = { badOrderIds, overlapIds };
       const reasons = attentionReasons(r, conflictIds);
@@ -1255,10 +1260,11 @@ function renderResults() {
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
       const timeFieldClass = (badOrderIds.has(r.id) || overlapIds.has(r.id)) ? ' field-conflict' : '';
+      const dateClass = !runInfo[i].isFirstOfRun ? ' date-repeat' : '';
 
       html += `<div class="shift-row" onclick="toggleShiftExpanded(${r.id})">
         <span class="shift-caret" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
-        <span class="shift-date">${dateDisplay}</span>
+        <span class="shift-date${dateClass}">${dateDisplay}</span>
         <span class="shift-type">${escapeHtml(r.type) || '(untitled)'}</span>
         ${needsAttention ? `<span class="shift-warn" title="Needs attention — ${escapeHtml(reasons.join(', '))}">&#9888;</span>` : ''}
         <span class="shift-time">${formatTimeRange(r.startTime, r.endTime)}</span>

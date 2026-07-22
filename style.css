@@ -231,6 +231,12 @@ td.num, th.num { text-align: right; font-family: var(--mono); }
 .shift-row:hover { background: #fcfbf8; }
 .shift-caret { width: 12px; flex-shrink: 0; color: var(--dim); font-size: 11px; }
 .shift-date { font-family: var(--mono); font-size: 12px; color: var(--dim); width: 64px; flex-shrink: 0; }
+/* A row sharing a date with the row above, within the same week (see
+   dateRunInfo() in index.html), fades its date text instead of repeating
+   it — reveals on hover of the row, since the whole row (not a per-field
+   input) is the interactive unit in this layout. */
+.shift-date.date-repeat { opacity: 0.3; }
+.shift-row:hover .shift-date.date-repeat { opacity: 1; }
 .shift-type { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shift-warn { color: var(--warn); flex-shrink: 0; }
 .shift-time { font-family: var(--mono); font-size: 12px; color: var(--dim); width: 110px; flex-shrink: 0; text-align: right; }
