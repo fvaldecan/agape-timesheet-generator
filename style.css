@@ -181,6 +181,24 @@ summary {
   background: #fffef9;
 }
 .cell-input-wide { width: 100%; min-width: 160px; }
+/* A row sharing a date with the row above (see dateRunInfo() in index.html)
+   fades its date input instead of repeating it — still a real, independently
+   editable input, just visually de-emphasized until hovered/focused. */
+.date-repeat .cell-input {
+  opacity: 0.15;
+  border-color: transparent;
+  background: transparent;
+}
+.date-repeat:hover .cell-input,
+.date-repeat .cell-input:focus {
+  opacity: 1;
+  border-color: var(--line);
+  background: #fffef9;
+}
+/* A row whose date carries into the next row (same day) drops the row
+   divider under just the Date cell — mirrors the "no line inside a merged
+   cell" look of the real rowspan merge in the docx/print exports. */
+.date-no-border { border-bottom: none; }
 td .dim { color: var(--dim); }
 .amount-input { display: inline-block; width: 70px; text-align: right; }
 .amount-input.amount-overridden { color: var(--warn); font-weight: 600; }

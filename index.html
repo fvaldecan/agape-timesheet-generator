@@ -725,6 +725,25 @@ function computeGroups(shifts) {
   return { byLocation, grandTotal: Math.round(grandTotal * 100) / 100 };
 }
 
+// rows must already be sorted chronologically (computeGroups guarantees
+// this) — consecutive same-date rows are then always adjacent. Returns a
+// parallel array so the app table (visual merge) and docx/print exports
+// (real rowspan) can both group same-day rows without re-deriving this.
+// A blank date never merges with anything, even another blank one.
+function dateRunInfo(rows) {
+  const info = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (i > 0 && rows[i].date && rows[i].date === rows[i - 1].date) {
+      info.push({ isFirstOfRun: false, runLength: 0 });
+      continue;
+    }
+    let len = 1;
+    while (rows[i].date && i + len < rows.length && rows[i + len].date === rows[i].date) len++;
+    info.push({ isFirstOfRun: true, runLength: len });
+  }
+  return info;
+}
+
 // ---------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------
@@ -1059,8 +1078,20 @@ function renderResults() {
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="loc-heading">${loc.toUpperCase()}</div>`;
     html += `<table><tr><th scope="col">Date</th><th scope="col">Type of class</th><th scope="col">Sport</th><th scope="col">Time</th><th scope="col">Hourly Wage of Employee for each class</th><th scope="col"># people</th><th scope="col">Location</th><th scope="col" class="num">Amount</th><th scope="col"></th></tr>`;
-    rows.forEach(r => {
+    const runInfo = dateRunInfo(rows);
+    rows.forEach((r, i) => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
+      // Rows sharing a date with the row above visually de-emphasize their
+      // repeated date (see .date-repeat in style.css) — the input itself
+      // stays fully independent and editable, this is display-only.
+      // Separately, a row that shares its date with the *next* row drops
+      // the divider under just the Date cell (see .date-no-border) — same
+      // "no line inside a merged cell" look the docx/print rowspan gives,
+      // while every other column (genuinely different per row) keeps its
+      // own divider so distinct lessons stay easy to tell apart.
+      const mergesDown = i < rows.length - 1 && r.date && rows[i + 1].date === r.date;
+      const dateCellClasses = [!runInfo[i].isFirstOfRun && 'date-repeat', mergesDown && 'date-no-border'].filter(Boolean);
+      const dateCellClass = dateCellClasses.length ? ` class="${dateCellClasses.join(' ')}"` : '';
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
       const sportCell = `<input list="sportOptions" class="cell-input" value="${escapeHtml(r.sport || '')}" placeholder="sport..." aria-label="Sport, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
              onchange="setShiftSport(${r.id}, this.value)">`;
@@ -1070,7 +1101,7 @@ function renderResults() {
              onchange="setShiftLocation(${r.id}, this.value)">`;
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
       html += `<tr>
-        <td><input type="date" class="cell-input w-130" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
+        <td${dateCellClass}><input type="date" class="cell-input w-130" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
         <td><input class="cell-input cell-input-wide" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
         <td>${sportCell}</td>
         <td>
@@ -1181,13 +1212,27 @@ async function downloadDocx() {
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     children.push(new Paragraph({ children: [new TextRun({ text: loc.toUpperCase(), bold: true })], spacing: { before: 200, after: 100 } }));
 
-    const dataRows = rows.map(r => {
-      return new TableRow({
-        children: [formatDateDisplay(r.date), r.type, r.sport || '', formatTimeRange(r.startTime, r.endTime), hourlyWageLabel(r), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].map((val, i) => new TableCell({
-          width: { size: colWidths[i], type: WidthType.DXA },
-          children: [new Paragraph({ alignment: i >= 5 ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: String(val) })] })],
-        })),
+    // Consecutive rows sharing a date get a real merged cell here (docx
+    // supports rowSpan directly) — the anchor row declares rowSpan and the
+    // rest of the run simply omits the Date cell from its children.
+    const runInfo = dateRunInfo(rows);
+    const dataRows = rows.map((r, idx) => {
+      const cells = [];
+      if (runInfo[idx].isFirstOfRun) {
+        cells.push(new TableCell({
+          width: { size: colWidths[0], type: WidthType.DXA },
+          rowSpan: runInfo[idx].runLength,
+          children: [new Paragraph({ children: [new TextRun({ text: formatDateDisplay(r.date) })] })],
+        }));
+      }
+      [r.type, r.sport || '', formatTimeRange(r.startTime, r.endTime), hourlyWageLabel(r), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].forEach((val, j) => {
+        const colIdx = j + 1; // colWidths[0] is Date, handled above
+        cells.push(new TableCell({
+          width: { size: colWidths[colIdx], type: WidthType.DXA },
+          children: [new Paragraph({ alignment: colIdx >= 5 ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: String(val) })] })],
+        }));
       });
+      return new TableRow({ children: cells });
     });
 
     const subtotalRow = new TableRow({
@@ -1251,9 +1296,16 @@ function printTimesheet() {
     const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
     html += `<div class="print-loc">${escapeHtml(loc.toUpperCase())}</div>`;
     html += `<table class="print-table"><tr><th>Date</th><th>Type of Class</th><th>Sport</th><th>Time</th><th>Hourly Wage of Employee for each class</th><th class="num"># People</th><th class="num">Amount</th></tr>`;
-    rows.forEach(r => {
+    // Consecutive same-date rows get a real merged cell here — the anchor
+    // row's <td> declares rowspan, the rest of the run just omits the Date
+    // <td> entirely and the browser's own table layout handles the rest.
+    const runInfo = dateRunInfo(rows);
+    rows.forEach((r, i) => {
+      const dateCell = runInfo[i].isFirstOfRun
+        ? `<td rowspan="${runInfo[i].runLength}">${escapeHtml(formatDateDisplay(r.date))}</td>`
+        : '';
       html += `<tr>
-        <td>${escapeHtml(formatDateDisplay(r.date))}</td>
+        ${dateCell}
         <td>${escapeHtml(r.type)}</td>
         <td>${escapeHtml(r.sport || '')}</td>
         <td>${escapeHtml(formatTimeRange(r.startTime, r.endTime))}</td>
