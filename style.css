@@ -180,31 +180,7 @@ summary {
   font-size: 12px;
   background: #fffef9;
 }
-.cell-input-wide { width: 100%; min-width: 160px; }
-/* A row sharing a date with the row above (see dateRunInfo() in index.html)
-   fades its date input instead of repeating it — still a real, independently
-   editable input, just visually de-emphasized until hovered/focused. */
-.date-repeat .cell-input {
-  opacity: 0.15;
-  border-color: transparent;
-  background: transparent;
-}
-.date-repeat:hover .cell-input,
-.date-repeat .cell-input:focus {
-  opacity: 1;
-  border-color: var(--line);
-  background: #fffef9;
-}
-/* A row whose date carries into the next row (same day) drops the row
-   divider under just the Date cell — mirrors the "no line inside a merged
-   cell" look of the real rowspan merge in the docx/print exports. */
-.date-no-border { border-bottom: none; }
-/* Time cell for a shift with a bad time order or an overlap against
-   another shift (see computeConflictIds() in index.html) — same warn
-   visual language as .field-missing uses for incomplete rate rows, so a
-   long sheet's flagged row(s) are findable without hunting. */
-.time-conflict { background: var(--warn-dim); border-left: 3px solid var(--warn); }
-td .dim { color: var(--dim); }
+.dim { color: var(--dim); }
 .amount-input { display: inline-block; width: 70px; text-align: right; }
 .amount-input.amount-overridden { color: var(--warn); font-weight: 600; }
 .rate-unmatched { color: var(--warn); font-weight: 600; font-style: italic; }
@@ -217,6 +193,8 @@ td .dim { color: var(--dim); }
   font-size: 15px; padding: 0 4px;
 }
 .row-del:hover { color: var(--warn); }
+/* Print-only table (see #printArea/.print-table) still uses plain <table>
+   markup — the on-screen results list was replaced by .shift-row below. */
 table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #5a5f57; background: #fcfbf8; }
@@ -228,7 +206,75 @@ td.num, th.num { text-align: right; font-family: var(--mono); }
   letter-spacing: 0.04em;
   margin: 20px 0 4px;
 }
-.subtotal-row td { font-weight: 600; border-top: 1px solid var(--ink); border-bottom: none; }
+.week-heading {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--brand-purple-dim);
+  padding: 6px 10px;
+  margin-top: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.shift-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  cursor: pointer;
+}
+.shift-row:hover { background: #fcfbf8; }
+.shift-caret { width: 12px; flex-shrink: 0; color: var(--dim); font-size: 11px; }
+.shift-date { font-family: var(--mono); font-size: 12px; color: var(--dim); width: 64px; flex-shrink: 0; }
+/* A row sharing a date with the row above, within the same week (see
+   dateRunInfo() in index.html), fades its date text instead of repeating
+   it — reveals on hover of the row, since the whole row (not a per-field
+   input) is the interactive unit in this layout. */
+.shift-date.date-repeat { opacity: 0.3; }
+.shift-row:hover .shift-date.date-repeat { opacity: 1; }
+.shift-type { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shift-warn { color: var(--warn); flex-shrink: 0; }
+.shift-time { font-family: var(--mono); font-size: 12px; color: var(--dim); width: 110px; flex-shrink: 0; text-align: right; }
+.shift-amount { font-family: var(--mono); font-size: 13px; width: 64px; flex-shrink: 0; text-align: right; }
+.shift-amount.amount-overridden { color: var(--warn); font-weight: 600; }
+.shift-detail {
+  padding: 10px 12px 14px 34px;
+  background: #fcfbf8;
+  border-bottom: 1px solid var(--line);
+}
+.shift-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px 14px;
+}
+.field label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+  margin-bottom: 3px;
+}
+.field .cell-input, .field .amount-input { width: 100%; }
+.field-static { font-size: 13px; padding: 4px 0; }
+.field-wide { grid-column: span 2; }
+.field-amount { text-align: right; }
+/* Start/End field for a shift with a bad time order or an overlap against
+   another shift (see computeConflictIds() in index.html) — same warn
+   visual language .rate-row-incomplete uses for incomplete rate rows. */
+.field-conflict { background: var(--warn-dim); border-left: 3px solid var(--warn); padding-left: 6px; margin-left: -6px; }
+.subtotal-line {
+  text-align: right;
+  font-weight: 600;
+  padding: 8px 4px;
+  border-top: 1px solid var(--ink);
+}
 .total {
   font-family: var(--serif);
   font-size: 22px;
@@ -318,6 +364,3 @@ footer { margin-top: 40px; font-size: 12px; color: var(--dim); font-family: var(
 .mb-4 { margin-bottom: 4px; }
 .my-8 { margin: 8px 0; }
 .w-40 { width: 40px; }
-.w-50 { width: 50px; }
-.w-100 { width: 100px; }
-.w-130 { width: 130px; }
