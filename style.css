@@ -259,6 +259,10 @@ td.num, th.num { text-align: right; font-family: var(--mono); }
 .field-static { font-size: 13px; padding: 4px 0; }
 .field-wide { grid-column: span 2; }
 .field-amount { text-align: right; }
+/* Start/End field for a shift with a bad time order or an overlap against
+   another shift (see computeConflictIds() in index.html) — same warn
+   visual language .rate-row-incomplete uses for incomplete rate rows. */
+.field-conflict { background: var(--warn-dim); border-left: 3px solid var(--warn); padding-left: 6px; margin-left: -6px; }
 .subtotal-line {
   text-align: right;
   font-weight: 600;

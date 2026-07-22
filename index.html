@@ -825,6 +825,23 @@ function computeConflictIds(shifts) {
   return { badOrderIds, overlapIds };
 }
 
+// Folds every reason a row's collapsed summary line should show a warning
+// icon and auto-expand into one place — missing location, unmatched rate,
+// and the two time-conflict conditions from computeConflictIds() all read
+// the same way to the coach ("this row needs a look"), so they share one
+// mechanic rather than three different visual languages.
+function attentionReasons(shift, conflictIds) {
+  const reasons = [];
+  if (!shift.location) reasons.push('missing location');
+  if (!shift.rule.match) reasons.push('no matching rate');
+  if (conflictIds.badOrderIds.has(shift.id)) reasons.push('end time before start time');
+  if (conflictIds.overlapIds.has(shift.id)) reasons.push('overlaps another entry');
+  return reasons;
+}
+function shiftNeedsAttention(shift, conflictIds) {
+  return attentionReasons(shift, conflictIds).length > 0;
+}
+
 // ---------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------
@@ -842,7 +859,7 @@ function isShiftExpanded(id, needsAttention) {
 }
 function toggleShiftExpanded(id) {
   const shift = lastResult.shifts.find(s => s.id === id);
-  const needsAttention = shift ? (!shift.location || !shift.rule.match) : false;
+  const needsAttention = shift ? shiftNeedsAttention(shift, computeConflictIds(lastResult.shifts)) : false;
   expandedOverrides.set(id, !isShiftExpanded(id, needsAttention));
   renderResults();
 }
@@ -1231,16 +1248,19 @@ function renderResults() {
       if (weekCollapsed) return;
       weekRows.forEach(r => {
       const dateDisplay = formatDateDisplay(r.date) || 'no date';
-      const needsAttention = !r.location || !r.rule.match;
+      const conflictIds = { badOrderIds, overlapIds };
+      const reasons = attentionReasons(r, conflictIds);
+      const needsAttention = reasons.length > 0;
       const expanded = isShiftExpanded(r.id, needsAttention);
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
       const maxHint = r.attendanceMax ? ` <span class="dim">/ ${r.attendanceMax}</span>` : '';
+      const timeFieldClass = (badOrderIds.has(r.id) || overlapIds.has(r.id)) ? ' field-conflict' : '';
 
       html += `<div class="shift-row" onclick="toggleShiftExpanded(${r.id})">
         <span class="shift-caret" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
         <span class="shift-date">${dateDisplay}</span>
         <span class="shift-type">${escapeHtml(r.type) || '(untitled)'}</span>
-        ${needsAttention ? '<span class="shift-warn" title="Needs attention — missing location or rate">&#9888;</span>' : ''}
+        ${needsAttention ? `<span class="shift-warn" title="Needs attention — ${escapeHtml(reasons.join(', '))}">&#9888;</span>` : ''}
         <span class="shift-time">${formatTimeRange(r.startTime, r.endTime)}</span>
         <span class="shift-amount${overridden ? ' amount-overridden' : ''}">$${amountFor(r).toFixed(2)}</span>
         <button class="row-del" title="Remove this line" aria-label="Delete this row (${escapeHtml(r.type) || 'blank'} on ${dateDisplay})" onclick="event.stopPropagation(); deleteShift(${r.id})">&times;</button>
@@ -1262,11 +1282,11 @@ function renderResults() {
               <input list="sportOptions" class="cell-input" value="${escapeHtml(r.sport || '')}" placeholder="sport..." aria-label="Sport, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
                 onchange="setShiftSport(${r.id}, this.value)">
             </div>
-            <div class="field">
+            <div class="field${timeFieldClass}" title="${badOrderIds.has(r.id) ? 'End time is before start time' : overlapIds.has(r.id) ? 'Overlaps another entry\'s time' : ''}">
               <label>Start</label>
               <select class="cell-input" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">${timeOptionsHtml(r.startTime)}</select>
             </div>
-            <div class="field">
+            <div class="field${timeFieldClass}" title="${badOrderIds.has(r.id) ? 'End time is before start time' : overlapIds.has(r.id) ? 'Overlaps another entry\'s time' : ''}">
               <label>End</label>
               <select class="cell-input" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">${timeOptionsHtml(r.endTime)}</select>
             </div>
