@@ -1244,11 +1244,23 @@ function confirmUnmatchedRateExport() {
   const n = lastResult.shifts.filter(s => !s.rule.match).length;
   return confirm(`${n} entr${n === 1 ? 'y has' : 'ies have'} no matching rate rule and will show $0.00. Export anyway?`);
 }
+function hasTimeConflict() {
+  if (!lastResult) return false;
+  const { badOrderIds, overlapIds } = computeConflictIds(lastResult.shifts);
+  return badOrderIds.size > 0 || overlapIds.size > 0;
+}
+function confirmTimeConflictExport() {
+  if (!hasTimeConflict()) return true;
+  const { badOrderIds, overlapIds } = computeConflictIds(lastResult.shifts);
+  const n = badOrderIds.size + overlapIds.size;
+  return confirm(`${n} entr${n === 1 ? 'y has' : 'ies have'} a time conflict (bad order or overlap) — see the highlighted row(s). Export anyway?`);
+}
 
 function downloadCsv() {
   if (!lastResult) return;
   if (!confirmUnassignedExport()) return;
   if (!confirmUnmatchedRateExport()) return;
+  if (!confirmTimeConflictExport()) return;
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   let csv = `Name,"${lastResult.name.replace(/"/g, '""')}"\n`;
@@ -1279,6 +1291,7 @@ async function downloadDocx() {
   }
   if (!confirmUnassignedExport()) return;
   if (!confirmUnmatchedRateExport()) return;
+  if (!confirmTimeConflictExport()) return;
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, ShadingType } = docx;
@@ -1375,6 +1388,7 @@ function printTimesheet() {
   if (!lastResult) return;
   if (!confirmUnassignedExport()) return;
   if (!confirmUnmatchedRateExport()) return;
+  if (!confirmTimeConflictExport()) return;
   countTimesheetCompletionOnce();
   const { byLocation, grandTotal } = computeGroups(lastResult.shifts);
 
