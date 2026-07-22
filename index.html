@@ -1141,12 +1141,19 @@ function renderResults() {
   html += `<datalist id="sportOptions">${knownSports().map(s => `<option value="${escapeHtml(s)}">`).join('')}</datalist>`;
   const unassignedCount = (byLocation['Unassigned'] || []).length;
   const unmatchedRateCount = shifts.filter(s => !s.rule.match).length;
+  const { badOrderIds, overlapIds } = computeConflictIds(shifts);
 
   if (unmatchedRateCount > 0) {
     html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unmatchedRateCount} entr${unmatchedRateCount === 1 ? 'y has' : 'ies have'} no matching rate rule</strong> — showing $0.00, marked "No rate matched" below. Add a rate rule in Settings, or fix the row's Type of class text so it matches one.</div>`;
   }
   if (unassignedCount > 0) {
     html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unassignedCount} entr${unassignedCount === 1 ? 'y needs' : 'ies need'} a location</strong> — pick one per row below in UNASSIGNED.</div>`;
+  }
+  if (badOrderIds.size > 0) {
+    html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${badOrderIds.size} entr${badOrderIds.size === 1 ? 'y has' : 'ies have'} an end time before its start time</strong> — highlighted below. Likely an AM/PM mix-up.</div>`;
+  }
+  if (overlapIds.size > 0) {
+    html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${overlapIds.size} entr${overlapIds.size === 1 ? 'y overlaps' : 'ies overlap'} another entry's time</strong> — highlighted below. Just double check before exporting.</div>`;
   }
 
   locOrder.forEach(loc => {
@@ -1176,11 +1183,18 @@ function renderResults() {
       const locCell = `<input list="locOptions" class="cell-input" value="${escapeHtml(r.location || '')}" placeholder="location..." aria-label="Location, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}"
              onchange="setShiftLocation(${r.id}, this.value)">`;
       const overridden = r.manualAmount !== null && r.manualAmount !== undefined;
+      // A row's Time cell gets highlighted (not the whole row) so a long
+      // sheet's flagged entries are findable at a glance — bad time order
+      // takes priority over overlap in the tooltip since it's the more
+      // actionable/unambiguous of the two.
+      const timeConflictTitle = badOrderIds.has(r.id) ? 'End time is before start time'
+        : overlapIds.has(r.id) ? 'Overlaps another entry\'s time' : '';
+      const timeCellAttrs = timeConflictTitle ? ` class="time-conflict" title="${timeConflictTitle}"` : '';
       html += `<tr>
         <td${dateCellClass}><input type="date" class="cell-input w-130" value="${escapeHtml(r.date)}" aria-label="Date" onchange="setShiftField(${r.id},'date',this.value)"></td>
         <td><input class="cell-input cell-input-wide" value="${escapeHtml(r.type)}" aria-label="Type of class" onchange="setShiftField(${r.id},'type',this.value)"></td>
         <td>${sportCell}</td>
-        <td>
+        <td${timeCellAttrs}>
           <select class="cell-input w-100" aria-label="Start time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'startTime',this.value)">${timeOptionsHtml(r.startTime)}</select>
           <span aria-hidden="true">&ndash;</span>
           <select class="cell-input w-100" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">${timeOptionsHtml(r.endTime)}</select>
