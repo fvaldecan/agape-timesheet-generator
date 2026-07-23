@@ -22,8 +22,15 @@ static files.
 4. If the pay period covers more than one week (common — usually 2), copy
    the next week from Club Automation and repeat steps 2-3. Duplicate
    entries (same date, time, and type) are automatically skipped.
-5. Downloads a `.docx` or `.csv` commission sheet once everything's in.
-6. **Clear & start over** wipes everything to begin a fresh pay period.
+5. Reviews the sheet, grouped by **location** and then by **week** within
+   each location (collapsible, so a multi-week sheet doesn't turn into an
+   endless scroll). Each entry is a single summary line — click it to
+   expand every editable field (date, type, sport, time, location, rate,
+   headcount, amount). Anything that needs a look (missing location, no
+   matching rate rule, a bad start/end time, or an overlap with another
+   entry) shows a warning icon and auto-expands so it can't be missed.
+6. Downloads a `.docx` or `.csv` commission sheet once everything's in.
+7. **Clear & start over** wipes everything to begin a fresh pay period.
 
 Your schedule data never leaves your browser. The schedule HTML, rate
 settings, and compensation notes all stay local — there's no client
@@ -124,34 +131,43 @@ it, and everything they enter stays local to their browser (see above).
 - **No location roster.** Every private lesson lands in an **Unassigned**
   section until you pick a location for it that week — nothing is
   remembered client-to-client, since the same client can attend either
-  location. A prominent warning shows above the results whenever anything
-  is unassigned, and exporting with unassigned entries asks for
-  confirmation first. The Location column is editable on every row, not
-  just unassigned ones, so a wrong guess (from the click-fetch detail, or
-  the "- FV" / "- CM" title-suffix hint) can be corrected directly —
-  editing it moves the row into the right group immediately.
+  location. A wrong guess (from the click-fetch detail, or the "- FV" /
+  "- CM" title-suffix hint) can be corrected directly — editing it moves
+  the entry into the right location/week group immediately.
 - **Booking titles that don't match any rate rule are flagged, not
   silently zeroed.** If nothing in Settings matches a booking's title,
-  it's priced at $0.00 rather than guessing — but that row is marked "No
-  rate matched" (in place of a dollar figure) both on screen and in every
-  export, a warning banner calls out the count, and exporting asks for
-  confirmation first. Fix it by adding a rate rule that matches, or by
-  editing the row's Type of class text.
+  it's priced at $0.00 rather than guessing. Fix it by adding a rate rule
+  that matches, or by editing the entry's Type of class text.
+- **A missing location, an unmatched rate, an end time before its start
+  time, and an entry overlapping another one's time all share one warning
+  mechanic.** Any of those four conditions puts a warning icon on that
+  entry's summary line and auto-expands it (an explicit collapse sticks
+  until you edit it again), plus a banner above the sheet with a live
+  count. Overlap detection checks every entry against every other
+  regardless of location — one coach can't be in two places at once, so a
+  cross-location double-booking is exactly as real a conflict as a
+  same-location one. Back-to-back sessions (one ending exactly when the
+  next starts) don't trigger it. None of this blocks anything — it's a
+  heads-up, not a hard stop — but exporting (CSV, docx, or print) with any
+  of these still outstanding asks for confirmation first.
 - **Group class headcount isn't in the calendar data**, so it can't be
   auto-detected. Any rate rule set to "Per-person split" shows an editable
   headcount field per session. Hourly rules also show an editable "#
   people" field (defaulted from the rule, usually 1) — purely
   informational for hourly pricing, but useful for flagging semi-private
   lessons (e.g. two students in one booking).
-- **Everything in the results table is manually editable** — date, type,
-  time, and amount can all be typed over directly, and any row can be
-  deleted (e.g. a cancelled lesson) or added (e.g. something missing from
-  the calendar). An edited amount shows in orange with a reset (↺) button
-  to snap back to the calculated value.
+- **Everything is manually editable.** Each entry is a single summary line
+  (date, type, time, amount) that expands on click into every field —
+  date, type, sport, location, rate, headcount, amount, and start/end
+  time (picked from a 30-minute-increment list rather than free-typed, so
+  it can't drift out of the half-hour grid Club Automation books on). Any
+  entry can be deleted (e.g. a cancelled lesson) or added (e.g. something
+  missing from the calendar). An edited amount shows in orange with a
+  reset (↺) button to snap back to the calculated value.
 - **Cancelled lessons still show up on the calendar.** The schedule HTML
   doesn't distinguish a cancelled booking from one that happened — delete
   the row manually if that's the case.
 - **One-off event durations don't always match actual pay.** Scheduled
   duration on the calendar and what actually got paid have differed by a
   few minutes/dollars in practice. Spot check one-off events, or just
-  override the amount directly in the table.
+  override the amount directly on the entry.
