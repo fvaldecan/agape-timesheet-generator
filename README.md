@@ -5,7 +5,7 @@ formatted, totaled commission sheet — .docx or .csv. Everything runs in
 the browser; no backend, no database, nothing to host besides a couple of
 static files.
 
-**[Try it live](#)** _(update this link once deployed)_
+**[Try it live](https://fvaldecan.github.io/agape-timesheet-generator/)**
 
 ## How it works
 
