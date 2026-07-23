@@ -39,10 +39,16 @@ exception is anonymous usage analytics ([GoatCounter](https://www.goatcounter.co
 it records aggregate pageviews, unique visitors, which export buttons get
 clicked, and a "timesheet completed" event (fired once per sheet, the
 first time any export happens — repeat downloads or extra formats of the
-same sheet don't inflate it). It never sees the schedule content, rate
-numbers, or anything typed into the app. See the `<script
-data-goatcounter>` tag near the bottom of `index.html` if you want to see
-exactly what it sends, or strip it out entirely.
+same sheet don't inflate it). Alongside that same event, it records which
+coarse duration bucket the sheet fell into (under 2min / 2-5min / 5-10min
+/ 10-20min / over 20min), timed from the first Parse click to that first
+export — GoatCounter's free tier only counts hits to a path with no
+numeric event values, so bucketing is how a rough time-to-complete
+distribution comes out of it without ever sending an exact timestamp. It
+never sees the schedule content, rate numbers, or anything typed into the
+app. See the `<script data-goatcounter>` tag near the bottom of
+`index.html` if you want to see exactly what it sends, or strip it out
+entirely.
 
 ## Deploying it
 

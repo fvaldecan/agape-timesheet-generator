@@ -880,11 +880,34 @@ function toggleWeekCollapsed(key) {
 // formats of the same sheet don't inflate it. Reset only in clearAll(), so
 // it tracks "how many timesheets" rather than "how many export clicks."
 let hasCountedTimesheetCompletion = false;
+
+// Clock starts on the first Parse click of a sheet's lifecycle (whether or
+// not that parse succeeds — fixing a rate error first is still part of the
+// time a coach spends) and is read once, at the same first-export moment
+// as the completion count above. GoatCounter's free JS snippet only counts
+// hits to a path, it has no numeric event value, so a duration turns into
+// a distribution the same way any of its other counts do: bucket it into
+// the path string. That keeps this exactly as anonymous as the existing
+// analytics — no per-user timestamps ever leave the browser, only which
+// bucket a finished sheet landed in.
+let sheetStartedAt = null;
+function durationBucket(ms) {
+  const min = ms / 60000;
+  if (min < 2) return 'under-2min';
+  if (min < 5) return '2-5min';
+  if (min < 10) return '5-10min';
+  if (min < 20) return '10-20min';
+  return 'over-20min';
+}
 function countTimesheetCompletionOnce() {
   if (hasCountedTimesheetCompletion) return;
   hasCountedTimesheetCompletion = true;
   if (window.goatcounter && window.goatcounter.count) {
     window.goatcounter.count({ path: 'timesheet-completed', title: 'Timesheet completed', event: true });
+    if (sheetStartedAt !== null) {
+      const bucket = durationBucket(Date.now() - sheetStartedAt);
+      window.goatcounter.count({ path: `timesheet-duration/${bucket}`, title: `Timesheet duration: ${bucket}`, event: true });
+    }
   }
 }
 
@@ -896,6 +919,7 @@ let pendingShifts = null;
 let pendingSummary = null;
 
 function runParse() {
+  if (sheetStartedAt === null) sheetStartedAt = Date.now();
   saveSettings();
   const html = document.getElementById('htmlInput').value.trim();
   const status = document.getElementById('parseStatus');
@@ -994,6 +1018,7 @@ function clearAll() {
     pendingShifts = null;
     pendingSummary = null;
     hasCountedTimesheetCompletion = false;
+    sheetStartedAt = null;
     expandedOverrides.clear();
     const htmlInput = document.getElementById('htmlInput');
     if (htmlInput) htmlInput.value = '';
@@ -1576,10 +1601,13 @@ function triggerDownload(blob, filename) {
 <!--
   Usage analytics — GoatCounter (goatcounter.com), a free, open-source,
   cookie-free pageview/click counter. Only records anonymized aggregate
-  visit counts and which buttons below get clicked (see the
-  data-goatcounter-click attributes above) — never the schedule HTML,
-  rate settings, or anything a coach types in, all of which still stay
-  local to their own browser (see README).
+  visit counts, which buttons below get clicked (see the
+  data-goatcounter-click attributes above), a "timesheet completed" count,
+  and which coarse duration bucket (under 2min / 2-5min / 5-10min /
+  10-20min / over 20min) a finished sheet fell into, timed from the first
+  Parse click to that first export — never the schedule HTML, rate
+  settings, exact timestamps, or anything a coach types in, all of which
+  still stay local to their own browser (see README).
 
   Before this goes live, sign up free at https://www.goatcounter.com/
   and replace YOURCODE below with your site code from Settings → Site.
