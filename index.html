@@ -1206,12 +1206,22 @@ function formatTime12(hhmm) {
 }
 // Times are edited via a <select> of every half-hour mark rather than a
 // native <input type="time"> — an off-grid value simply isn't one of the
-// options, so there's nothing to round or validate after the fact.
+// options, so there's nothing to round or validate after the fact. The
+// range is 6am-9pm (lesson hours) rather than the full day, to keep the
+// list short; a `selected` value outside that range (e.g. an odd import)
+// still gets its own option appended so it isn't silently dropped.
+const TIME_OPTION_START_MIN = 6 * 60;
+const TIME_OPTION_END_MIN = 21 * 60;
 function timeOptionsHtml(selected) {
   let html = `<option value=""${selected ? '' : ' selected'}>--:--</option>`;
-  for (let totalMin = 0; totalMin < 24 * 60; totalMin += 30) {
+  let sawSelected = false;
+  for (let totalMin = TIME_OPTION_START_MIN; totalMin <= TIME_OPTION_END_MIN; totalMin += 30) {
     const val = `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`;
+    if (val === selected) sawSelected = true;
     html += `<option value="${val}"${val === selected ? ' selected' : ''}>${formatTime12(val)}</option>`;
+  }
+  if (selected && !sawSelected) {
+    html += `<option value="${selected}" selected>${formatTime12(selected)}</option>`;
   }
   return html;
 }
