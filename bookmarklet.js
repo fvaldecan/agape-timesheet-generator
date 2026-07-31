@@ -6,6 +6,19 @@
   // applies when the code here is installed by hand.
   var APP_URL = 'https://fvaldecan.github.io/agape-timesheet-generator/';
   var APP_ORIGIN = new URL(APP_URL).origin;
+  // A snapshot of {match, matchMode} pairs from the app's current pay
+  // rate rules, as of whenever this bookmarklet was last installed — used
+  // below to guess which booking titles already have a rate configured,
+  // without ever needing live access to the app's own storage (a
+  // bookmarklet running on Club Automation's origin can't read that).
+  // Always empty here: this file is the manually-installed copy, with no
+  // page to pull a live snapshot from, so every title looks "new" to it.
+  // The app-generated copy (index.html's drag-to-bookmarks button) fills
+  // this in for real, and re-fills it each time a coach re-drags the
+  // button — a stale/empty snapshot only ever causes a redundant question
+  // or a missed one, never bad data, since the app re-checks everything
+  // for real once it receives the schedule.
+  var AGAPE_RULES_SNAPSHOT = [];
 
   if (window.location.hostname.indexOf('clubautomation.com') === -1) {
     alert('This button only works on your Club Automation schedule page. Go there first, open your weekly schedule, then click this again.');
@@ -97,6 +110,22 @@
     var sib = h4.nextElementSibling;
     return sib ? sib.textContent.replace(/\s+/g, ' ').trim() : '';
   }
+  // Deliberately duplicated from classifyRate()'s matching logic in
+  // index.html — this is a second hand-sync point beyond the whole-file
+  // sync already documented near the bottom of index.html, so keep the
+  // two in sync by hand if either one's matching rule ever changes.
+  function localClassifyMatches(title, snapshot) {
+    for (var j = 0; j < snapshot.length; j++) {
+      var r = snapshot[j];
+      if (!r.match) continue;
+      var mode = r.matchMode || 'contains';
+      var matches = mode === 'startsWith'
+        ? title.toUpperCase().indexOf(r.match.trim().toUpperCase()) === 0
+        : title.toLowerCase().indexOf(r.match.trim().toLowerCase()) !== -1;
+      if (matches) return true;
+    }
+    return false;
+  }
   // Fallback for when navigator.clipboard.writeText() fails (Safari can
   // reject it once the user's original click gesture has expired, which
   // it will have by the time the async scraping loop below finishes).
@@ -173,9 +202,15 @@
   }
 
   var htmlOut = clone.outerHTML;
+  // Not acted on yet (that's the next commit) — just confirming the
+  // filtering itself works before layering the actual prompt UX on top.
+  var titlesToPrompt = distinctTitles.filter(function (t) {
+    return !localClassifyMatches(t, AGAPE_RULES_SNAPSHOT);
+  });
   var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').'];
   if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).');
   if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.');
+  if (titlesToPrompt.length) summaryLines.push(titlesToPrompt.length + ' booking type' + (titlesToPrompt.length === 1 ? '' : 's') + ' without a saved pay rate (' + titlesToPrompt.join(', ') + ').');
   var msg = summaryLines.join('\n');
 
   // Hand the scrape off to the app tab: send once the app has confirmed
