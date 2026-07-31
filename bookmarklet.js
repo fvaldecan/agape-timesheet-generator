@@ -201,16 +201,79 @@
     await new Promise(function (r) { setTimeout(r, 150); });
   }
 
-  var htmlOut = clone.outerHTML;
-  // Not acted on yet (that's the next commit) — just confirming the
-  // filtering itself works before layering the actual prompt UX on top.
   var titlesToPrompt = distinctTitles.filter(function (t) {
     return !localClassifyMatches(t, AGAPE_RULES_SNAPSHOT);
   });
+
+  // Keeps asking until the coach either gives a valid number in range or
+  // cancels — Cancel anywhere in this chain means "skip this title," never
+  // "save a half-filled-in rule." max is optional (percentages pass 100;
+  // dollar amounts have no upper bound).
+  function promptForNumber(question, max) {
+    while (true) {
+      var raw = window.prompt(question);
+      if (raw === null) return null;
+      var n = parseFloat(raw.trim());
+      var outOfRange = raw.trim() === '' || isNaN(n) || n < 0 || (max !== undefined && n > max);
+      if (outOfRange) {
+        alert("That doesn't look like a valid " + (max !== undefined ? ('percentage (0-' + max + ')') : 'dollar amount') + " — try again, or Cancel on the next prompt to skip this one.");
+        continue;
+      }
+      return n;
+    }
+  }
+
+  // Runs after the scrape above, not interleaved with it — confirm()/
+  // prompt() are synchronous, not task-queue yields, so they don't go
+  // stale the way an await does; the one gesture-timing-sensitive call
+  // (window.open) already happened before any of this. Each answered
+  // title becomes a real rate rule; skipping (Cancel at any step) leaves
+  // it exactly as unmatched as it is today — $0.00 with a warning icon in
+  // the app, nothing lost, nothing forced.
+  //
+  // Two shapes on offer: flat hourly (rule.type='hourly'), or per-person
+  // per-session with a percentage cut (rule.type='per_person') — the
+  // latter covers group/clinic pricing like "$20/person per session,
+  // Agape keeps 50%" regardless of how long the session runs. Headcount
+  // itself isn't asked here — the app already collects that per-session,
+  // not per rate rule (see rate row rendering in index.html).
+  var newRateRules = [];
+  for (var ti = 0; ti < titlesToPrompt.length; ti++) {
+    var title = titlesToPrompt[ti];
+    var setUp = confirm('"' + title + '" doesn\'t have a pay rate set up yet.\n\n' +
+      "Set one up now? (Cancel to skip — it'll show as $0.00 with a warning on your sheet until you add one, same as today.)");
+    if (!setUp) continue;
+
+    var isFlat = confirm('Is "' + title + '" a flat hourly rate?\n\n' +
+      'OK = flat $/hr.\nCancel = priced per person per session instead (e.g. $20/person, Agape keeps a %).');
+
+    if (isFlat) {
+      var rate = promptForNumber('What do you get paid per hour for "' + title + '"?');
+      if (rate === null) continue;
+      newRateRules.push({ match: title, matchMode: 'startsWith', type: 'hourly', mode: 'flat', rate: rate, defaultPeople: 1 });
+    } else {
+      var pricePerPerson = promptForNumber('What does each person pay for a session of "' + title + '"?');
+      if (pricePerPerson === null) continue;
+      var agapeCutPct = promptForNumber('What percentage does Agape keep for "' + title + '"?', 100);
+      if (agapeCutPct === null) continue;
+      newRateRules.push({ match: title, matchMode: 'startsWith', type: 'per_person', pricePerPerson: pricePerPerson, coachShare: 100 - agapeCutPct });
+    }
+  }
+
+  // Embedded on the cloned root (not just the postMessage payload) so this
+  // work survives the copy-to-clipboard fallback too, not only a
+  // successful hand-off — see index.html's extractEmbeddedNewRateRules().
+  if (newRateRules.length) {
+    clone.setAttribute('data-agape-new-rate-rules', encodeURIComponent(JSON.stringify(newRateRules)));
+  }
+  var htmlOut = clone.outerHTML;
+
   var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').'];
   if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).');
   if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.');
-  if (titlesToPrompt.length) summaryLines.push(titlesToPrompt.length + ' booking type' + (titlesToPrompt.length === 1 ? '' : 's') + ' without a saved pay rate (' + titlesToPrompt.join(', ') + ').');
+  if (newRateRules.length) summaryLines.push('Set up ' + newRateRules.length + ' new pay rate' + (newRateRules.length === 1 ? '' : 's') + '.');
+  var skippedCount = titlesToPrompt.length - newRateRules.length;
+  if (skippedCount > 0) summaryLines.push(skippedCount + ' booking type' + (skippedCount === 1 ? '' : 's') + ' still without a rate — will show $0.00 until fixed.');
   var msg = summaryLines.join('\n');
 
   // Hand the scrape off to the app tab: send once the app has confirmed
@@ -237,7 +300,7 @@
         if (settled) return;
         if (appReady) {
           try {
-            appWin.postMessage({ type: 'AGAPE_SCHEDULE_DATA', html: htmlOut, newRateRules: [] }, APP_ORIGIN);
+            appWin.postMessage({ type: 'AGAPE_SCHEDULE_DATA', html: htmlOut, newRateRules: newRateRules }, APP_ORIGIN);
           } catch (e) {}
         } else {
           setTimeout(trySend, 300);
