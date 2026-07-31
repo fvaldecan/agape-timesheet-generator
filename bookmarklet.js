@@ -120,6 +120,11 @@
   var liveBlocks = el.querySelectorAll('.eventBlock');
   var cloneBlocks = clone.querySelectorAll('.eventBlock');
   var ok = 0, fail = 0, skipped = 0, blockedCount = 0, emptyCount = 0, realCount = 0;
+  // Every distinct real-booking title seen this run — piggybacks on the
+  // titleOf() call already made per iteration below, no extra work. Not
+  // used yet; a later commit checks each of these against a local rate
+  // snapshot to decide what to prompt for.
+  var distinctTitles = [], seenTitles = {};
 
   for (var i = 0; i < liveBlocks.length; i++) {
     var t = titleOf(liveBlocks[i]);
@@ -128,6 +133,7 @@
     if (isBlocked) { blockedCount++; continue; }
     if (isEmptySlot) { emptyCount++; continue; }
     realCount++;
+    if (!seenTitles[t]) { seenTitles[t] = true; distinctTitles.push(t); }
 
     overlay.textContent = 'Getting your schedule... ' + (i + 1) + ' of ' + liveBlocks.length + '. Please stay on this page.';
 
