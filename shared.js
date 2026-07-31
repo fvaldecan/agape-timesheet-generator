@@ -795,3 +795,177 @@ function setupBookmarkletButton(buttonElId, textareaElId) {
     console.error('Could not set up the bookmarklet button:', e);
   }
 }
+
+// ---------------------------------------------------------------------
+// Export builders — generalized (PR 1 commit 5, docs/MULTI_COACH_PLAN.md)
+// to accept a `sections` array instead of a single implicit sheet, so the
+// multi-coach page (PR 7) can produce one combined export with a section
+// per confirmed coach. Each section is
+// { name, byLocation, grandTotal, compLines }.
+//
+// For a single-element sections array the output is byte-identical to
+// what index.html's downloadCsv/downloadDocx/printTimesheet produced
+// before this extraction. The "Date,..." line (csvForSections /
+// printHtmlForSections / docxDocumentForSections all agree on this) only
+// ever appears when there's exactly one section — it's a single-coach-page
+// artifact ("when was this sheet generated"), not something that makes
+// sense repeated once per coach in a combined export.
+// ---------------------------------------------------------------------
+function csvForSections(sections) {
+  let csv = '';
+  sections.forEach((section, idx) => {
+    const { name, byLocation, grandTotal, compLines } = section;
+    csv += `Name,"${(name || '').replace(/"/g, '""')}"\n`;
+    if (sections.length === 1) {
+      csv += `Date,${formatDateDisplay(todayIso())}\n`;
+    }
+    csv += '\n';
+    csv += 'Location,Date,Type of Class,Sport,Time,Rate,# People,Amount\n';
+    Object.entries(byLocation).forEach(([loc, rows]) => {
+      rows.forEach(r => {
+        csv += `"${loc}","${formatDateDisplay(r.date)}","${r.type.replace(/"/g, '""')}","${(r.sport || '').replace(/"/g, '""')}","${formatTimeRange(r.startTime, r.endTime)}","${hourlyWageLabel(r)}",${r.numPeople ?? ''},${amountFor(r).toFixed(2)}\n`;
+      });
+    });
+    csv += `,,,,,,TOTAL,${grandTotal.toFixed(2)}\n`;
+
+    if (compLines && compLines.length > 0) {
+      csv += `\nCOMPENSATION\n`;
+      compLines.forEach(line => { csv += `"${line.replace(/"/g, '""')}"\n`; });
+    }
+
+    if (idx < sections.length - 1) csv += '\n';
+  });
+  return csv;
+}
+
+function printHtmlForSections(sections) {
+  let html = '';
+  sections.forEach(section => {
+    const { name, byLocation, grandTotal, compLines } = section;
+    html += `<div class="print-name">Name: ${escapeHtml(name)}</div>`;
+    if (sections.length === 1) {
+      html += `<div class="print-date">Date: ${escapeHtml(formatDateDisplay(todayIso()))}</div>`;
+    }
+    html += `<div class="print-title">TIMESHEET</div>`;
+
+    Object.entries(byLocation).forEach(([loc, rows]) => {
+      const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
+      html += `<div class="print-loc">${escapeHtml(loc.toUpperCase())}</div>`;
+      html += `<table class="print-table"><tr><th>Date</th><th>Type of Class</th><th>Sport</th><th>Time</th><th>Hourly Wage of Employee for each class</th><th class="num"># People</th><th class="num">Amount</th></tr>`;
+      // Consecutive same-date rows get a real merged cell here — the anchor
+      // row's <td> declares rowspan, the rest of the run just omits the Date
+      // <td> entirely and the browser's own table layout handles the rest.
+      const runInfo = dateRunInfo(rows);
+      rows.forEach((r, i) => {
+        const dateCell = runInfo[i].isFirstOfRun
+          ? `<td rowspan="${runInfo[i].runLength}">${escapeHtml(formatDateDisplay(r.date))}</td>`
+          : '';
+        html += `<tr>
+        ${dateCell}
+        <td>${escapeHtml(r.type)}</td>
+        <td>${escapeHtml(r.sport || '')}</td>
+        <td>${escapeHtml(formatTimeRange(r.startTime, r.endTime))}</td>
+        <td>${escapeHtml(hourlyWageLabel(r))}</td>
+        <td class="num">${r.numPeople ?? '—'}</td>
+        <td class="num">$${amountFor(r).toFixed(2)}</td>
+      </tr>`;
+      });
+      html += `<tr class="print-subtotal"><td colspan="6">Subtotal:</td><td>$${subtotal.toFixed(2)}</td></tr>`;
+      html += `</table>`;
+    });
+
+    html += `<div class="print-total">TOTAL: $${grandTotal.toFixed(2)}</div>`;
+
+    if (compLines && compLines.length > 0) {
+      html += `<div class="print-comp-title">COMPENSATION</div>`;
+      html += `<div class="print-comp"><ul>${compLines.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></div>`;
+    }
+  });
+  return html;
+}
+
+async function docxDocumentForSections(sections) {
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, ShadingType } = docx;
+  const colWidths = [1300, 2600, 1000, 1800, 1500, 1000, 1400];
+
+  // Reused across every location table in every section — it's static
+  // content (just the column labels), so one instance is fine to hand to
+  // multiple Table constructors, same as the single-coach code did before
+  // this was generalized.
+  const headerRow = new TableRow({
+    children: ['Date', 'Type of Class', 'Sport', 'Time', 'Hourly Wage of Employee for each class', '# People', 'Amount'].map((label, i) => new TableCell({
+      width: { size: colWidths[i], type: WidthType.DXA },
+      shading: { type: ShadingType.CLEAR, fill: 'D9D9D9' },
+      children: [new Paragraph({ children: [new TextRun({ text: label, bold: true })] })],
+    })),
+  });
+
+  const children = [];
+  sections.forEach(section => {
+    const { name, byLocation, grandTotal, compLines } = section;
+    children.push(new Paragraph({ children: [new TextRun({ text: `Name ${name}`, bold: true, size: 24 })] }));
+    if (sections.length === 1) {
+      children.push(new Paragraph({ children: [new TextRun({ text: `Date ${formatDateDisplay(todayIso())}`, size: 20 })], spacing: { after: 100 } }));
+    }
+    children.push(new Paragraph({ children: [new TextRun({ text: 'TIMESHEET', bold: true, size: 24 })], spacing: { after: 300 } }));
+
+    Object.entries(byLocation).forEach(([loc, rows]) => {
+      const subtotal = rows.reduce((s, r) => s + amountFor(r), 0);
+      children.push(new Paragraph({ children: [new TextRun({ text: loc.toUpperCase(), bold: true })], spacing: { before: 200, after: 100 } }));
+
+      // Consecutive rows sharing a date get a real merged cell here (docx
+      // supports rowSpan directly) — the anchor row declares rowSpan and the
+      // rest of the run simply omits the Date cell from its children.
+      const runInfo = dateRunInfo(rows);
+      const dataRows = rows.map((r, idx) => {
+        const cells = [];
+        if (runInfo[idx].isFirstOfRun) {
+          cells.push(new TableCell({
+            width: { size: colWidths[0], type: WidthType.DXA },
+            rowSpan: runInfo[idx].runLength,
+            children: [new Paragraph({ children: [new TextRun({ text: formatDateDisplay(r.date) })] })],
+          }));
+        }
+        [r.type, r.sport || '', formatTimeRange(r.startTime, r.endTime), hourlyWageLabel(r), r.numPeople ?? '—', `$${amountFor(r).toFixed(2)}`].forEach((val, j) => {
+          const colIdx = j + 1; // colWidths[0] is Date, handled above
+          cells.push(new TableCell({
+            width: { size: colWidths[colIdx], type: WidthType.DXA },
+            children: [new Paragraph({ alignment: colIdx >= 5 ? AlignmentType.RIGHT : AlignmentType.LEFT, children: [new TextRun({ text: String(val) })] })],
+          }));
+        });
+        return new TableRow({ children: cells });
+      });
+
+      const subtotalRow = new TableRow({
+        children: [
+          new TableCell({ width: { size: colWidths[0]+colWidths[1]+colWidths[2]+colWidths[3]+colWidths[4]+colWidths[5], type: WidthType.DXA }, columnSpan: 6,
+            children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Subtotal:', bold: true })] })] }),
+          new TableCell({ width: { size: colWidths[6], type: WidthType.DXA },
+            children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: `$${subtotal.toFixed(2)}`, bold: true })] })] }),
+        ],
+      });
+
+      children.push(new Table({ width: { size: colWidths.reduce((a,b)=>a+b,0), type: WidthType.DXA }, columnWidths: colWidths, rows: [headerRow, ...dataRows, subtotalRow] }));
+      children.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+    });
+
+    children.push(new Paragraph({ children: [new TextRun({ text: `TOTAL: $${grandTotal.toFixed(2)}`, bold: true, size: 28 })], spacing: { before: 200 } }));
+
+    if (compLines && compLines.length > 0) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: 'COMPENSATION', bold: true, size: 22 })],
+        spacing: { before: 400, after: 120 },
+        border: { top: { style: 'single', size: 6, color: 'CCCCCC' } },
+      }));
+      compLines.forEach(line => {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: line })],
+          bullet: { level: 0 },
+          spacing: { after: 60 },
+        }));
+      });
+    }
+  });
+
+  return new Document({ sections: [{ properties: { page: { size: { width: 12240, height: 15840 } } }, children }] });
+}
