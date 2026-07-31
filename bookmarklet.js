@@ -1,4 +1,11 @@
 (async function () {
+  // Where the timesheet app lives. If this bookmarklet was installed by
+  // dragging the button from the app itself, refreshBookmarkletButton()
+  // swaps this for wherever that page was actually loaded from (so a
+  // self-hosted deployment still works) — this hardcoded default only
+  // applies when the code here is installed by hand.
+  var APP_URL = 'https://fvaldecan.github.io/agape-timesheet-generator/';
+
   if (window.location.hostname.indexOf('clubautomation.com') === -1) {
     alert('This button only works on your Club Automation schedule page. Go there first, open your weekly schedule, then click this again.');
     return;
@@ -7,6 +14,35 @@
   if (!el) {
     alert('Could not find your schedule on this page. Make sure you have your weekly schedule open (not the login page or another screen), and that it has finished loading, then try again.');
     return;
+  }
+
+  // Open (or refocus) the app tab synchronously, in the same click gesture
+  // that ran this bookmarklet — waiting until after the async scraping
+  // below would get it treated as a blocked popup in some browsers, the
+  // same gesture-staleness problem noted below for the clipboard copy.
+  // A named target reuses the same tab across weeks. Passing an EMPTY url
+  // (not APP_URL) is what makes reuse safe: if a window with this name
+  // already exists, this call refocuses it WITHOUT navigating it — a real
+  // navigation would reload the app tab and wipe out any weeks already
+  // added to that in-progress sheet (nothing about the built sheet
+  // persists across a reload, only Settings do).
+  var appWin = null;
+  try { appWin = window.open('', 'agapeTimesheetApp'); } catch (e) { appWin = null; }
+  if (appWin) {
+    var isFreshTab;
+    try {
+      // Reading .location.href succeeds and returns 'about:blank' only for
+      // a brand-new same-origin window; it throws for a window already
+      // navigated to the app (now cross-origin from clubautomation.com).
+      // Writing/navigating .location cross-origin is always allowed —
+      // only *reading* it is restricted — so this asymmetry is what lets
+      // fresh-vs-reused be told apart without ever needing real access to
+      // the app tab's contents.
+      isFreshTab = (appWin.location.href === 'about:blank' || appWin.location.href === '');
+    } catch (e) { isFreshTab = false; }
+    if (isFreshTab) {
+      try { appWin.location.href = APP_URL; } catch (e) { appWin = null; }
+    }
   }
 
   var overlay = document.createElement('div');
