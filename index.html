@@ -959,6 +959,43 @@ function shiftFingerprint(s) {
 let pendingShifts = null;
 let pendingSummary = null;
 
+// Reads the new-rate-rules the bookmarklet embedded on the scraped
+// schedule's root element (data-agape-new-rate-rules) — the single source
+// of truth for that data regardless of whether it arrived via the
+// postMessage hand-off or the manual copy/paste fallback, since both
+// carry the same html string through this same function.
+function extractEmbeddedNewRateRules(html) {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const root = doc.body.firstElementChild;
+    const raw = root && root.getAttribute('data-agape-new-rate-rules');
+    if (!raw) return [];
+    const parsed = JSON.parse(decodeURIComponent(raw));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Prepends newly-answered rules ahead of existing ones — first match
+// wins, and a specific one-off title should out-rank a broad pre-seeded
+// category, matching this app's own "put specific rows above general
+// ones" convention. Dedupes on {match, matchMode} (case-insensitive) so
+// re-applying the same schedule html twice (e.g. a stray retry) doesn't
+// pile up duplicate rows. Returns how many were actually added.
+function mergeNewRateRules(newRules) {
+  if (!newRules.length) return 0;
+  const key = r => (r.match || '').trim().toLowerCase() + '|' + (r.matchMode || 'contains');
+  const existing = new Set(state.rates.map(key));
+  const toAdd = newRules.filter(r => !existing.has(key(r)));
+  if (!toAdd.length) return 0;
+  state.rates = toAdd.concat(state.rates);
+  saveSettings();
+  renderRates();
+  markRatesDirty();
+  return toAdd.length;
+}
+
 function runParse() {
   if (sheetStartedAt === null) sheetStartedAt = Date.now();
   saveSettings();
@@ -969,6 +1006,11 @@ function runParse() {
   confirmBtn.classList.add('hidden');
   pendingShifts = null;
   pendingSummary = null;
+
+  // Merge before validating/parsing so a freshly-answered rule (from the
+  // bookmarklet's on-page prompts) is already in effect for this exact
+  // parse, not just the next one.
+  const addedRuleCount = mergeNewRateRules(extractEmbeddedNewRateRules(html));
 
   // A rule with a blank pay field would silently compute $0 for anything
   // that matches it — block parsing entirely instead, so a half-filled-in
@@ -1012,6 +1054,7 @@ function runParse() {
   pendingSummary = { totalFound: events.length, blocked: excluded.blocked.length, emptySlots: excluded.emptySlots.length, dupes, toAdd: toAdd.length };
 
   const parts = [];
+  if (addedRuleCount) parts.push(`Added ${addedRuleCount} new pay rate rule${addedRuleCount === 1 ? '' : 's'} from Club Automation — check ${addedRuleCount === 1 ? 'it' : 'them'} in Settings.`);
   parts.push(`Found ${pendingSummary.totalFound} calendar entries.`);
   parts.push(`${pendingSummary.toAdd} will be added.`);
   if (pendingSummary.blocked) parts.push(`${pendingSummary.blocked} blocked time (excluded, unpaid).`);
