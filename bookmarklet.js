@@ -1,3 +1,10 @@
+// This is the canonical, hand-edited source for the "Get My Schedule"
+// bookmarklet. It's duplicated in two other places that must be kept in
+// sync by hand whenever this file changes: shared.js's BOOKMARKLET_SOURCE
+// constant (minified to one line) and BOOKMARKLET.md's code block. Neither
+// can just <script src> this file instead — Club Automation's CSP blocks
+// cross-origin scripts on their page, so the full logic has to ship inline
+// wherever the button/URL is built.
 (async function () {
   if (window.location.hostname.indexOf('clubautomation.com') === -1) {
     alert('This button only works on your Club Automation schedule page. Go there first, open your weekly schedule, then click this again.');
