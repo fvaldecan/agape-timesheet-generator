@@ -92,7 +92,7 @@
     <details open>
       <summary>Pay rates</summary>
       <div class="config-grid" id="rateRows"></div>
-      <button class="btn secondary mt-6" onclick="addRateRow()">+ add a rate</button>
+      <button class="btn secondary mt-6" onclick="rateEditor.addRow()">+ add a rate</button>
       <p class="hint-sm mt-8">
         Type a word from your booking titles (like "PL" or "Drill"), choose
         <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
@@ -173,163 +173,15 @@ let state = loadSettings();
 document.getElementById('coachName').value = state.name;
 document.getElementById('compNotes').value = state.compNotes || '';
 
-// Fields left blank by the user must render as blank, not as a made-up
-// number — a $45/hr shown before anyone typed it looks like a real,
-// confirmed rate. "??" only falls through on null/undefined, so an
-// explicit 0 the user typed still displays as 0.
-function renderRates() {
-  const el = document.getElementById('rateRows');
-  el.innerHTML = '';
-  let dragSrcIndex = null;
-
-  state.rates.forEach((r, i) => {
-    const missing = rateRuleMissingFields(r);
-    const missCls = field => missing.includes(field) ? ' field-missing' : '';
-
-    const row = document.createElement('div');
-    row.className = 'rate-row' + (missing.length ? ' rate-row-incomplete' : '');
-    row.draggable = true;
-
-    // A row must be draggable as a whole (that's what makes the drag
-    // image/drop target work), but only starting the drag from the handle
-    // — not from anywhere you might click/select text in an input.
-    let allowDrag = false;
-    row.addEventListener('dragstart', e => {
-      if (!allowDrag) { e.preventDefault(); return; }
-      allowDrag = false;
-      dragSrcIndex = i;
-      e.dataTransfer.effectAllowed = 'move';
-      row.classList.add('dragging');
-    });
-    row.addEventListener('dragend', () => row.classList.remove('dragging'));
-    row.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      row.classList.add('drag-over');
-    });
-    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
-    row.addEventListener('drop', e => {
-      e.preventDefault();
-      row.classList.remove('drag-over');
-      if (dragSrcIndex === null || dragSrcIndex === i) return;
-      const [moved] = state.rates.splice(dragSrcIndex, 1);
-      state.rates.splice(i, 0, moved);
-      dragSrcIndex = null;
-      renderRates();
-      saveSettings();
-      markRatesDirty();
-    });
-
-    const missAttr = field => missing.includes(field) ? ' aria-invalid="true"' : '';
-    const missPlaceholder = field => missing.includes(field) ? ' placeholder="required"' : '';
-    const rowLabel = r.match ? `"${r.match}" rate row` : `rate row ${i + 1}`;
-
-    let typeFields;
-    if (r.type === 'per_person') {
-      typeFields = `
-        <span class="affix">$<input class="${missCls('pricePerPerson')}" value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person" aria-label="Price charged per person"${missAttr('pricePerPerson')}${missPlaceholder('pricePerPerson')}
-          onchange="state.rates[${i}].pricePerPerson=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
-        <span class="rate-suffix">per person</span>
-        <span class="rate-x">&times;</span>
-        <span class="affix"><input class="${missCls('coachShare')}" value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach" aria-label="Percent of that price that goes to the coach"${missAttr('coachShare')}${missPlaceholder('coachShare')}
-          onchange="state.rates[${i}].coachShare=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();">%</span>
-        <span class="rate-suffix">to coach</span>
-      `;
-    } else if (r.mode === 'split') {
-      const clientRate = r.clientRate;
-      const agapeCut = r.agapeCut;
-      const net = (clientRate ?? 0) - (agapeCut ?? 0);
-      typeFields = `
-        <select class="rate-mode" aria-label="Pricing mode" onchange="setRateMode(${i}, this.value)">
-          <option value="flat">Flat $/hr</option>
-          <option value="split" selected>Client rate − Agape cut</option>
-        </select>
-        <span class="affix">$<input class="${missCls('clientRate')}" value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour" aria-label="What the client is billed per hour"${missAttr('clientRate')}${missPlaceholder('clientRate')}
-          onchange="state.rates[${i}].clientRate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
-        <span class="rate-x">&minus;</span>
-        <span class="affix">$<input class="${missCls('agapeCut')}" value="${agapeCut ?? ''}" type="number" step="0.01" title="What Agape keeps per hour" aria-label="What Agape keeps per hour"${missAttr('agapeCut')}${missPlaceholder('agapeCut')}
-          onchange="state.rates[${i}].agapeCut=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
-        <span class="rate-suffix">= $${net.toFixed(2)}/hr to you</span>
-        <span class="rate-x">&middot;</span>
-        <input value="${r.defaultPeople ?? 1}" type="number" min="1" class="w-40" title="Default # people for this booking type" aria-label="Default number of people for this booking type"
-          onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();renderRates();markRatesDirty();">
-        <span class="rate-suffix">people</span>
-      `;
-    } else {
-      typeFields = `
-        <select class="rate-mode" aria-label="Pricing mode" onchange="setRateMode(${i}, this.value)">
-          <option value="flat" selected>Flat $/hr</option>
-          <option value="split">Client rate − Agape cut</option>
-        </select>
-        <span class="affix">$<input class="${missCls('rate')}" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour" aria-label="Pay per hour"${missAttr('rate')}${missPlaceholder('rate')}
-          onchange="state.rates[${i}].rate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
-        <span class="rate-suffix">/hr to you</span>
-        <span class="rate-x">&middot;</span>
-        <input value="${r.defaultPeople ?? 1}" type="number" min="1" class="w-40" title="Default # people for this booking type" aria-label="Default number of people for this booking type"
-          onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();renderRates();markRatesDirty();">
-        <span class="rate-suffix">people</span>
-      `;
-    }
-
-    row.innerHTML = `
-      <span class="rate-drag-handle" title="Drag to reorder — first match wins" aria-hidden="true">&#10495;</span>
-      <span class="rate-reorder">
-        <button type="button" class="rate-move-btn" aria-label="Move ${escapeHtml(rowLabel)} up" title="Move up" onclick="moveRateRow(${i}, -1)"${i === 0 ? ' disabled' : ''}>&#9650;</button>
-        <button type="button" class="rate-move-btn" aria-label="Move ${escapeHtml(rowLabel)} down" title="Move down" onclick="moveRateRow(${i}, 1)"${i === state.rates.length - 1 ? ' disabled' : ''}>&#9660;</button>
-      </span>
-      <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="${missing.includes('match') ? 'Title text... (required)' : 'Title text...'}" aria-label="Match text from booking title"${missAttr('match')}
-        onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
-      <select class="rate-matchmode" aria-label="Match mode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();renderRates();markRatesDirty();">
-        <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>Starts with</option>
-        <option value="contains" ${r.matchMode !== 'startsWith' ? 'selected' : ''}>Contains</option>
-      </select>
-      <select class="rate-type" aria-label="Rate type" onchange="setRateType(${i}, this.value)">
-        <option value="hourly" ${r.type !== 'per_person' ? 'selected' : ''}>Hourly</option>
-        <option value="per_person" ${r.type === 'per_person' ? 'selected' : ''}>Per-person split</option>
-      </select>
-      <span class="rate-fields">${typeFields}</span>
-      <button aria-label="Remove ${escapeHtml(rowLabel)}" onclick="state.rates.splice(${i},1);renderRates();saveSettings();markRatesDirty();">remove</button>
-    `;
-    row.querySelector('.rate-drag-handle').addEventListener('mousedown', () => { allowDrag = true; });
-    row.addEventListener('mouseup', () => { allowDrag = false; });
-    el.appendChild(row);
-  });
-}
-function addRateRow() {
-  state.rates.push({ match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', defaultPeople: 1 });
-  renderRates();
-  markRatesDirty();
-}
-
-// Keyboard-operable equivalent of the mouse-only drag-to-reorder below —
-// order is meaningful ("first match wins"), so it can't be mouse-only.
-// Swaps two adjacent rows in place; out-of-range moves (top row up,
-// bottom row down) are no-ops rather than errors.
-function moveRateRow(i, direction) {
-  const j = i + direction;
-  if (j < 0 || j >= state.rates.length) return;
-  [state.rates[i], state.rates[j]] = [state.rates[j], state.rates[i]];
-  renderRates();
-  saveSettings();
-  markRatesDirty();
-}
-
-// Switching type/mode only ever changes that one field — it never invents
-// a pay number for the fields that type/mode needs. Leaving them blank is
-// intentional: it surfaces as an obviously-empty box rather than a
-// plausible-looking guessed rate.
-function setRateType(i, value) {
-  state.rates[i].type = value;
-  renderRates();
-  saveSettings();
-  markRatesDirty();
-}
-function setRateMode(i, value) {
-  state.rates[i].mode = value;
-  renderRates();
-  saveSettings();
-  markRatesDirty();
-}
+// Reusable rate editor (see shared.js createRateEditor) bound to this
+// page's single global state.rates — onChange persists to localStorage
+// and refreshes the "you changed a rate" dirty banner, same as every
+// mutation used to do inline before this was extracted (PR 1 commit 3).
+const rateEditor = createRateEditor(
+  () => state.rates,
+  document.getElementById('rateRows'),
+  () => { saveSettings(); markRatesDirty(); }
+);
 
 // Re-checks rate validity only for status elements *currently* showing a
 // rate-validation error (dataset.rateError === '1') — never touches a status
@@ -389,7 +241,7 @@ function reapplyRatesToSheet() {
   if (banner) banner.classList.remove('banner-visible');
 }
 
-renderRates();
+rateEditor.render();
 
 // This must be the full scraping logic, not a loader that fetches
 // bookmarklet.js over the network — Club Automation's CSP blocks

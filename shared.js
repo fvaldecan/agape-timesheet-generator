@@ -71,6 +71,206 @@ function validateRates(rates) {
   return problems;
 }
 
+// Reusable rate-rule editor: drag-to-reorder, add/remove rows, flat/split/
+// per-person field sets, live missing-field highlighting. Extracted (PR 1
+// commit 3, docs/MULTI_COACH_PLAN.md) so the multi-coach page can bind one
+// instance per coach rather than sharing a single global state.rates.
+//
+// getRates() is a zero-arg closure returning the live rates array to
+// mutate — each instance stays bound to whatever array it returns, so
+// multiple editors never step on each other. containerEl is the element
+// rows render into. onChange() runs after every mutation, before
+// re-render; the caller wires persistence (and any "dirty" banner) there.
+//
+// Field-level inputs (match text, matchMode, rate/clientRate/agapeCut/
+// pricePerPerson/coachShare, defaultPeople) are wired via addEventListener
+// after the row's HTML is built, rather than inline onchange="" strings —
+// inline strings can only reach global functions/state, which is exactly
+// what a per-coach instance can't rely on. Fields carry a data-field
+// attribute naming which property they write; a single generic listener
+// handles all of them.
+function createRateEditor(getRates, containerEl, onChange) {
+  function render() {
+    const rates = getRates();
+    containerEl.innerHTML = '';
+    let dragSrcIndex = null;
+
+    rates.forEach((r, i) => {
+      const missing = rateRuleMissingFields(r);
+      const missCls = field => missing.includes(field) ? ' field-missing' : '';
+
+      const row = document.createElement('div');
+      row.className = 'rate-row' + (missing.length ? ' rate-row-incomplete' : '');
+      row.draggable = true;
+
+      // A row must be draggable as a whole (that's what makes the drag
+      // image/drop target work), but only starting the drag from the handle
+      // — not from anywhere you might click/select text in an input.
+      let allowDrag = false;
+      row.addEventListener('dragstart', e => {
+        if (!allowDrag) { e.preventDefault(); return; }
+        allowDrag = false;
+        dragSrcIndex = i;
+        e.dataTransfer.effectAllowed = 'move';
+        row.classList.add('dragging');
+      });
+      row.addEventListener('dragend', () => row.classList.remove('dragging'));
+      row.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        row.classList.add('drag-over');
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+      row.addEventListener('drop', e => {
+        e.preventDefault();
+        row.classList.remove('drag-over');
+        if (dragSrcIndex === null || dragSrcIndex === i) return;
+        const [moved] = rates.splice(dragSrcIndex, 1);
+        rates.splice(i, 0, moved);
+        dragSrcIndex = null;
+        onChange();
+        render();
+      });
+
+      const missAttr = field => missing.includes(field) ? ' aria-invalid="true"' : '';
+      const missPlaceholder = field => missing.includes(field) ? ' placeholder="required"' : '';
+      const rowLabel = r.match ? `"${r.match}" rate row` : `rate row ${i + 1}`;
+
+      let typeFields;
+      if (r.type === 'per_person') {
+        typeFields = `
+          <span class="affix">$<input class="${missCls('pricePerPerson')}" data-field="pricePerPerson" value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person" aria-label="Price charged per person"${missAttr('pricePerPerson')}${missPlaceholder('pricePerPerson')}></span>
+          <span class="rate-suffix">per person</span>
+          <span class="rate-x">&times;</span>
+          <span class="affix"><input class="${missCls('coachShare')}" data-field="coachShare" value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach" aria-label="Percent of that price that goes to the coach"${missAttr('coachShare')}${missPlaceholder('coachShare')}>%</span>
+          <span class="rate-suffix">to coach</span>
+        `;
+      } else if (r.mode === 'split') {
+        const clientRate = r.clientRate;
+        const agapeCut = r.agapeCut;
+        const net = (clientRate ?? 0) - (agapeCut ?? 0);
+        typeFields = `
+          <select class="rate-mode" aria-label="Pricing mode">
+            <option value="flat">Flat $/hr</option>
+            <option value="split" selected>Client rate − Agape cut</option>
+          </select>
+          <span class="affix">$<input class="${missCls('clientRate')}" data-field="clientRate" value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour" aria-label="What the client is billed per hour"${missAttr('clientRate')}${missPlaceholder('clientRate')}></span>
+          <span class="rate-x">&minus;</span>
+          <span class="affix">$<input class="${missCls('agapeCut')}" data-field="agapeCut" value="${agapeCut ?? ''}" type="number" step="0.01" title="What Agape keeps per hour" aria-label="What Agape keeps per hour"${missAttr('agapeCut')}${missPlaceholder('agapeCut')}></span>
+          <span class="rate-suffix">= $${net.toFixed(2)}/hr to you</span>
+          <span class="rate-x">&middot;</span>
+          <input data-field="defaultPeople" value="${r.defaultPeople ?? 1}" type="number" min="1" class="w-40" title="Default # people for this booking type" aria-label="Default number of people for this booking type">
+          <span class="rate-suffix">people</span>
+        `;
+      } else {
+        typeFields = `
+          <select class="rate-mode" aria-label="Pricing mode">
+            <option value="flat" selected>Flat $/hr</option>
+            <option value="split">Client rate − Agape cut</option>
+          </select>
+          <span class="affix">$<input class="${missCls('rate')}" data-field="rate" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour" aria-label="Pay per hour"${missAttr('rate')}${missPlaceholder('rate')}></span>
+          <span class="rate-suffix">/hr to you</span>
+          <span class="rate-x">&middot;</span>
+          <input data-field="defaultPeople" value="${r.defaultPeople ?? 1}" type="number" min="1" class="w-40" title="Default # people for this booking type" aria-label="Default number of people for this booking type">
+          <span class="rate-suffix">people</span>
+        `;
+      }
+
+      row.innerHTML = `
+        <span class="rate-drag-handle" title="Drag to reorder — first match wins" aria-hidden="true">&#10495;</span>
+        <span class="rate-reorder">
+          <button type="button" class="rate-move-btn" data-action="move-up" aria-label="Move ${escapeHtml(rowLabel)} up" title="Move up"${i === 0 ? ' disabled' : ''}>&#9650;</button>
+          <button type="button" class="rate-move-btn" data-action="move-down" aria-label="Move ${escapeHtml(rowLabel)} down" title="Move down"${i === rates.length - 1 ? ' disabled' : ''}>&#9660;</button>
+        </span>
+        <input class="rate-match${missCls('match')}" data-field="match" value="${escapeHtml(r.match)}" placeholder="${missing.includes('match') ? 'Title text... (required)' : 'Title text...'}" aria-label="Match text from booking title"${missAttr('match')}>
+        <select class="rate-matchmode" data-field="matchMode" aria-label="Match mode">
+          <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>Starts with</option>
+          <option value="contains" ${r.matchMode !== 'startsWith' ? 'selected' : ''}>Contains</option>
+        </select>
+        <select class="rate-type" aria-label="Rate type">
+          <option value="hourly" ${r.type !== 'per_person' ? 'selected' : ''}>Hourly</option>
+          <option value="per_person" ${r.type === 'per_person' ? 'selected' : ''}>Per-person split</option>
+        </select>
+        <span class="rate-fields">${typeFields}</span>
+        <button data-action="remove" aria-label="Remove ${escapeHtml(rowLabel)}">remove</button>
+      `;
+
+      // Generic field wiring: every plain-value input/select carries a
+      // data-field naming which rate-rule property it writes. matchMode
+      // and match write the raw string; everything else here is numeric,
+      // with the money fields falling back to undefined on a cleared
+      // input (see rateRuleMissingFields) rather than coercing '' to 0.
+      row.querySelectorAll('[data-field]').forEach(fieldEl => {
+        fieldEl.addEventListener('change', () => {
+          const field = fieldEl.dataset.field;
+          const raw = fieldEl.value;
+          if (field === 'match' || field === 'matchMode') {
+            r[field] = raw;
+          } else if (field === 'defaultPeople') {
+            r.defaultPeople = Number(raw);
+          } else {
+            r[field] = raw === '' ? undefined : Number(raw);
+          }
+          onChange();
+          render();
+        });
+      });
+
+      row.querySelector('.rate-type').addEventListener('change', e => setType(i, e.target.value));
+      const modeSelect = row.querySelector('.rate-mode');
+      if (modeSelect) modeSelect.addEventListener('change', e => setMode(i, e.target.value));
+
+      row.querySelector('[data-action="move-up"]').addEventListener('click', () => moveRow(i, -1));
+      row.querySelector('[data-action="move-down"]').addEventListener('click', () => moveRow(i, 1));
+      row.querySelector('[data-action="remove"]').addEventListener('click', () => {
+        rates.splice(i, 1);
+        onChange();
+        render();
+      });
+
+      row.querySelector('.rate-drag-handle').addEventListener('mousedown', () => { allowDrag = true; });
+      row.addEventListener('mouseup', () => { allowDrag = false; });
+      containerEl.appendChild(row);
+    });
+  }
+
+  function addRow() {
+    getRates().push({ match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', defaultPeople: 1 });
+    onChange();
+    render();
+  }
+
+  // Keyboard-operable equivalent of the mouse-only drag-to-reorder above —
+  // order is meaningful ("first match wins"), so it can't be mouse-only.
+  // Swaps two adjacent rows in place; out-of-range moves (top row up,
+  // bottom row down) are no-ops rather than errors.
+  function moveRow(i, direction) {
+    const rates = getRates();
+    const j = i + direction;
+    if (j < 0 || j >= rates.length) return;
+    [rates[i], rates[j]] = [rates[j], rates[i]];
+    onChange();
+    render();
+  }
+
+  // Switching type/mode only ever changes that one field — it never invents
+  // a pay number for the fields that type/mode needs. Leaving them blank is
+  // intentional: it surfaces as an obviously-empty box rather than a
+  // plausible-looking guessed rate.
+  function setType(i, value) {
+    getRates()[i].type = value;
+    onChange();
+    render();
+  }
+  function setMode(i, value) {
+    getRates()[i].mode = value;
+    onChange();
+    render();
+  }
+
+  return { render, addRow, moveRow, setType, setMode };
+}
+
 // ---------------------------------------------------------------------
 // Parser — mirrors parse_schedule.py, but reads the DOM directly
 // ---------------------------------------------------------------------
