@@ -355,6 +355,99 @@ function parseSchedule(html) {
   return events;
 }
 
+// Some bookings (league play, camps, clinics) get recorded as one
+// .eventBlock per court in use, even though it's a single real-world class
+// occurrence with one coach (or shared coaches) — e.g. the same League Play
+// class shows up on both court 10 and court 11 at the same time, but only
+// one copy carries a Selected Pro. Left unhandled this both over-counts pay
+// (one class becomes N shifts downstream) and makes attribution depend on
+// whichever duplicate happens to get processed first. Run this before
+// attribution/pay math ever sees the events (right after parseSchedule()).
+// The grouping key deliberately matches shiftFingerprint's key (minus id),
+// so this stays consistent with the existing re-paste dedup in confirmAdd.
+function dedupeMultiCourtEvents(events) {
+  const groups = new Map();
+  events.forEach(e => {
+    const key = [e.date, e.startTime, e.endTime, e.title, e.client].join('|').toLowerCase();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  });
+  const result = [];
+  groups.forEach(group => {
+    if (group.length === 1) {
+      result.push(group[0]);
+      return;
+    }
+    // Prefer whichever duplicate carries a Selected Pro (the strongest
+    // "who taught this" signal), then Created By, else just the first.
+    const withPro = group.find(e => e.detailSelectedPro);
+    const withCreator = group.find(e => e.detailCreatedBy);
+    result.push(withPro || withCreator || group[0]);
+  });
+  return result;
+}
+
+// Plain customer court rentals ("Court Time") carry no coaching signal and
+// are never payroll-relevant — see docs/MULTI_COACH_PLAN.md PR 2. Uses a
+// small array constant rather than one hardcoded check, so a future
+// addition (e.g. a "Maintenance" block type) is a one-line change.
+const NON_COACHING_TITLES = ['court time'];
+function isCoachingRelevantTitle(rawTitle) {
+  const t = (rawTitle || '').trim().toLowerCase();
+  if (NON_COACHING_TITLES.includes(t)) return false;
+  if (t.includes('blocked')) return false;
+  return true;
+}
+
+// Matches a Created By / Selected Pro reference ({name, userId}) against a
+// list of coach profiles ({ id, name, aliases, aliasUserIds }) — userId
+// first (exact, since it's the stable Club Automation identifier), then a
+// case-insensitive substring match on name against each coach's aliases.
+function matchCoachByRef(ref, coaches) {
+  if (!ref) return null;
+  if (ref.userId != null) {
+    const byId = coaches.find(c => (c.aliasUserIds || []).some(id => Number(id) === ref.userId));
+    if (byId) return byId;
+  }
+  if (ref.name) {
+    const nameLower = ref.name.toLowerCase();
+    const byName = coaches.find(c => (c.aliases || []).some(a => {
+      const aLower = a.toLowerCase();
+      return nameLower.includes(aLower) || aLower.includes(nameLower);
+    }));
+    if (byName) return byName;
+  }
+  return null;
+}
+
+// Priority order: Selected Pro (strongest signal) > Created By (weaker,
+// often just whoever booked it) > the "PL: <coach last name>" grid text as
+// a last resort > null (Unattributed — the caller must bucket this
+// visibly, never drop it). The "PL" case matches against rawTitle, not
+// event.client — client is the subtitle text, which for a "PL" booking is
+// the *customer's* name (Club Automation's raw title is
+// "PL: <coach last name>", e.g. "PL: Valdecanas"; the subtitle underneath
+// is the client, e.g. "Yasutake"). index.html's single-coach page swaps in
+// client for display purposes only, since a coach already knows their own
+// name — that display string is the wrong input for multi-coach matching.
+function resolveCoachForEvent(event, coaches) {
+  let coach = matchCoachByRef(event.detailSelectedPro, coaches);
+  if (coach) return { coachId: coach.id, matchedVia: 'selectedPro', matchedName: event.detailSelectedPro.name };
+
+  coach = matchCoachByRef(event.detailCreatedBy, coaches);
+  if (coach) return { coachId: coach.id, matchedVia: 'createdBy', matchedName: event.detailCreatedBy.name };
+
+  if (event.rawTitle && event.rawTitle.toUpperCase().startsWith('PL')) {
+    const coachNameFromTitle = event.rawTitle.replace(/^PL:?\s*/i, '').trim();
+    if (coachNameFromTitle) {
+      coach = matchCoachByRef({ name: coachNameFromTitle, userId: null }, coaches);
+      if (coach) return { coachId: coach.id, matchedVia: 'plTitleText', matchedName: coachNameFromTitle };
+    }
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------
 // Calculator — mirrors generate_timesheet.py, plus per-row editable
 // location and attendee count (nothing here is auto-defaulted silently;
