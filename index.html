@@ -146,9 +146,15 @@ $40/hr on programmed groups, drills, classes"
 // pricing mode) are still filled in as a starting template; each coach fills
 // in their own $ amounts in Settings on first use, and the app's own
 // "missing field" highlighting guides them to do it.
+// GL and PHS are best-guess abbreviations, not confirmed Club Automation
+// title text — the coach's own naming is inconsistent in practice, per
+// direct confirmation, which is exactly what the bookmarklet's on-page
+// "what should this pay?" prompt exists to backstop: whatever these two
+// rows don't catch just gets asked about once and saved as its own rule.
 const DEFAULT_RATES = [
   { match: "PL", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
-  { match: "group class", matchMode: "contains", type: "per_person", coachShare: 50 },
+  { match: "GL", matchMode: "startsWith", type: "per_person", coachShare: 50 },
+  { match: "PHS", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
 ];
 
 function loadSettings() {
