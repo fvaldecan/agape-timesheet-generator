@@ -63,14 +63,22 @@
   var clone = el.cloneNode(true);
   var liveBlocks = el.querySelectorAll('.eventBlock');
   var cloneBlocks = clone.querySelectorAll('.eventBlock');
-  var ok = 0, fail = 0, skipped = 0, blockedCount = 0, emptyCount = 0, realCount = 0;
+  var ok = 0, fail = 0, skipped = 0, blockedCount = 0, emptyCount = 0, courtTimeCount = 0, realCount = 0;
 
   for (var i = 0; i < liveBlocks.length; i++) {
     var t = titleOf(liveBlocks[i]);
     var isBlocked = t.toLowerCase().indexOf('blocked') !== -1;
     var isEmptySlot = t.indexOf('PL') === 0 && !subtitleOf(liveBlocks[i]);
+    // Plain customer court rentals carry no coaching signal and are never
+    // payroll-relevant — skip them before the event-full-info fetch rather
+    // than wasting a request. Keep this exact-match check in sync by hand
+    // with shared.js's isCoachingRelevantTitle/NON_COACHING_TITLES if either
+    // changes (a bookmarklet can't <script src> that file cross-origin from
+    // Club Automation's CSP-locked page, so the logic has to be duplicated).
+    var isCourtTime = t.trim().toLowerCase() === 'court time';
     if (isBlocked) { blockedCount++; continue; }
     if (isEmptySlot) { emptyCount++; continue; }
+    if (isCourtTime) { courtTimeCount++; continue; }
     realCount++;
 
     overlay.textContent = 'Getting your schedule... ' + (i + 1) + ' of ' + liveBlocks.length + '. Please stay on this page.';
@@ -113,6 +121,7 @@
   var htmlOut = clone.outerHTML;
   var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').'];
   if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).');
+  if (courtTimeCount) summaryLines.push(courtTimeCount + ' court rental' + (courtTimeCount === 1 ? '' : 's') + ' (Court Time, ignored — not payroll-relevant).');
   if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.');
   var msg = summaryLines.join('\n');
 
