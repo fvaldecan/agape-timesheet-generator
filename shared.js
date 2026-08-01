@@ -345,6 +345,8 @@ function parseSchedule(html) {
       detailAttendance: detail ? detail.attendanceCurrent : null,
       detailAttendanceMax: detail ? detail.attendanceMax : null,
       detailService: detail ? detail.service : null,
+      detailCreatedBy: detail ? (detail.createdBy || null) : null,
+      detailSelectedPro: detail ? (detail.selectedPro || null) : null,
       _sort: start,
     });
   });
@@ -398,8 +400,44 @@ function sportLabel(raw) {
 function parseEventInfoHtml(contentHtml) {
   const doc = new DOMParser().parseFromString(contentHtml, 'text/html');
   const result = {};
+
+  // Created By / Selected Pro carry the "who taught/booked this" signal
+  // multi-coach attribution needs (see docs/MULTI_COACH_PLAN.md PR 2), but
+  // don't fit the generic label-sibling walk below: the name lives inside
+  // an <a class="view-user-info" user-id="..."> — Selected Pro's is
+  // additionally wrapped in a <div class="float-left">, so it isn't a
+  // direct sibling of the label — and matching needs the numeric user-id
+  // attribute, not just the display text the walk below collects. Special-
+  // cased here (own stopping rule: first <br> OR the next .label, so a
+  // wrapping div doesn't get walked past into the following field) rather
+  // than generalizing the walk below, to avoid risking a regression in the
+  // four labels that already work (location/service/duration/resource/
+  // attendance).
+  function extractUserRef(labelEl) {
+    const span = doc.createElement('div');
+    let node = labelEl.nextSibling;
+    while (node && !(node.nodeType === 1 && (node.tagName === 'BR' || node.classList.contains('label')))) {
+      span.appendChild(node.cloneNode(true));
+      node = node.nextSibling;
+    }
+    const link = span.querySelector('a.view-user-info');
+    if (!link) return null;
+    const name = link.textContent.trim();
+    const idAttr = link.getAttribute('user-id');
+    const userId = idAttr ? Number(idAttr) : null;
+    return { name, userId: (userId === null || isNaN(userId)) ? null : userId };
+  }
+
   doc.querySelectorAll('.label').forEach(labelEl => {
     const label = labelEl.textContent.replace(':', '').trim().toLowerCase();
+    if (label === 'created by') {
+      result.createdBy = extractUserRef(labelEl);
+      return;
+    }
+    if (label === 'selected pro') {
+      result.selectedPro = extractUserRef(labelEl);
+      return;
+    }
     let val = '';
     let node = labelEl.nextSibling;
     while (node && !(node.nodeType === 1 && node.tagName === 'BR')) {
