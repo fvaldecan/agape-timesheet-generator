@@ -13,7 +13,13 @@ static files.
    (right there on the page, step 0) up to their bookmarks bar — one-time
    setup, no separate file to dig through.
 2. Logs into Club Automation, opens their schedule, clicks the bookmark
-   from their bookmarks bar. It opens (or switches to) the app in a
+   from their bookmarks bar. If it finds a booking type without a saved
+   pay rate, it asks right there on the page — flat hourly, or priced per
+   person per session with a percentage cut — and remembers the answer as
+   a real, editable rate rule, so it's only asked once per booking type
+   (as long as the button was installed by dragging it from the app,
+   which keeps that memory current; see `BOOKMARKLET.md` for the
+   manual-install caveat). It then opens (or switches to) the app in a
    browser tab and sends the schedule there directly — no copy/paste. The
    app parses it automatically and shows its own review summary (found /
    will-add / blocked / empty / duplicates) — nothing is added to the
@@ -146,8 +152,11 @@ it, and everything they enter stays local to their browser (see above).
   the entry into the right location/week group immediately.
 - **Booking titles that don't match any rate rule are flagged, not
   silently zeroed.** If nothing in Settings matches a booking's title,
-  it's priced at $0.00 rather than guessing. Fix it by adding a rate rule
-  that matches, or by editing the entry's Type of class text.
+  it's priced at $0.00 rather than guessing. The bookmarklet's own
+  on-page prompt (see step 2 above) catches most of these proactively;
+  anything skipped there (or pasted in manually) can still be fixed by
+  adding a rate rule that matches, or by editing the entry's Type of
+  class text.
 - **A missing location, an unmatched rate, an end time before its start
   time, and an entry overlapping another one's time all share one warning
   mechanic.** Any of those four conditions puts a warning icon on that
