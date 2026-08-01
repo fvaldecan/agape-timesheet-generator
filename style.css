@@ -64,6 +64,18 @@ h1 {
   color: var(--brand-purple);
   border: 2px dashed var(--brand-purple);
 }
+#bookmarkletStaleHint {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: var(--warn-dim);
+  border-left: 4px solid var(--warn);
+  padding: 10px 14px;
+  margin-top: 12px;
+  font-size: 13px;
+  font-family: var(--serif);
+}
+#bookmarkletStaleHint.banner-visible { display: flex; }
 section { background: var(--panel); border: 1px solid var(--line); padding: 24px; margin-bottom: 20px; }
 section h2 {
   font-family: var(--mono);
