@@ -203,22 +203,29 @@ const DEFAULT_RATES = [
 ];
 
 // Guarantees the three core categories always exist and always sit last
-// in state.rates (see CORE_RATE_DEFS above for why last matters). Rows
-// saved by an older version of the app won't be tagged `core` yet — those
-// get matched up by their match text (case-insensitive, startsWith) so
-// whatever $ amounts a coach already entered carry forward untouched;
-// only a genuinely missing category gets seeded blank.
+// in state.rates (see CORE_RATE_DEFS above for why last matters). Runs on
+// *every* load, not just a coach's first one after this redesign shipped
+// — so it has to recognize a row it already tagged `core` on a previous
+// save (matched by tag) just as reliably as a pre-redesign row that
+// predates the tag entirely (matched by text, case-insensitive
+// startsWith). Getting this wrong in either direction either duplicates
+// the row or, worse, silently drops whatever $ amounts a coach already
+// entered back to blank on the next reload.
 function ensureCoreRates(rates) {
-  const withoutCore = rates.filter(r => !r.core);
+  const remaining = rates.slice();
   const coreRows = CORE_RATE_DEFS.map(def => {
-    const existing = withoutCore.find(r => (r.match || '').trim().toUpperCase() === def.match && (r.matchMode || 'contains') === 'startsWith');
-    if (existing) {
-      withoutCore.splice(withoutCore.indexOf(existing), 1);
+    let idx = remaining.findIndex(r => r.core === def.core);
+    if (idx === -1) {
+      idx = remaining.findIndex(r => !r.core && (r.match || '').trim().toUpperCase() === def.match && (r.matchMode || 'contains') === 'startsWith');
+    }
+    if (idx !== -1) {
+      const existing = remaining[idx];
+      remaining.splice(idx, 1);
       return Object.assign({}, existing, { core: def.core, match: def.match, matchMode: 'startsWith' });
     }
     return { core: def.core, match: def.match, matchMode: 'startsWith', type: 'hourly', mode: 'flat', defaultPeople: 1 };
   });
-  return withoutCore.concat(coreRows);
+  return remaining.concat(coreRows);
 }
 
 function loadSettings() {
@@ -560,18 +567,28 @@ function rateRuleMissingFields(r) {
   }
   return missing;
 }
-function validateRates() {
+// Parse-time gate: only a rule that actually matched a shift *in this
+// parse* has to be complete. The three core rows (PL/GL/PHS) can't be
+// deleted the way an ad-hoc row can, so a coach who genuinely never books
+// one of those categories (say, no PHS this week — or ever) would
+// otherwise be blocked forever by a rule they have no reason to fill in.
+// A rule that's incomplete and unused just stays incomplete — still
+// flagged in Settings — until a shift actually needs it. A rule with a
+// blank pay field that *does* match something still blocks, same
+// reasoning as before: it can't silently compute $0 on a real commission
+// sheet.
+function validateMatchedRates(shifts) {
   const problems = [];
-  if (state.rates.length === 0) {
-    problems.push('No pay rate rules configured — every booking would compute as $0. Add at least one rate below.');
-    return problems;
-  }
-  state.rates.forEach((r, i) => {
+  const seen = new Set();
+  shifts.forEach(s => {
+    const r = s.rule;
+    if (!r.match) return; // no rule matched at all — the "no matching rate rule" warning covers this, not this gate
     const missing = rateRuleMissingFields(r);
-    if (missing.length) {
-      const label = r.match ? `"${r.match}"` : '(no match text yet)';
-      problems.push(`Rate row ${i + 1} ${label}: missing ${missing.map(f => RATE_FIELD_LABELS[f]).join(', ')}.`);
-    }
+    if (!missing.length) return;
+    const key = r.match.trim().toLowerCase() + '|' + (r.matchMode || 'contains');
+    if (seen.has(key)) return;
+    seen.add(key);
+    problems.push(`"${r.match}": missing ${missing.map(f => RATE_FIELD_LABELS[f]).join(', ')}.`);
   });
   return problems;
 }
@@ -583,22 +600,40 @@ function validateRates() {
 // what makes the status text live, matching the field-level highlighting
 // that already recomputes on every edit.
 function refreshRateStatusOnEdit() {
-  [
-    ['parseStatus', 'parsing'],
-    ['updateTimesheetStatus', 'updating'],
-  ].forEach(([id, verb]) => {
-    const el = document.getElementById(id);
-    if (!el || el.dataset.rateError !== '1') return;
-    const rateProblems = validateRates();
-    if (rateProblems.length) {
-      el.innerHTML = `<strong>Fix your pay rates before ${verb}:</strong><br>` + rateProblems.map(escapeHtml).join('<br>');
-      el.className = 'status-warn';
-    } else {
-      el.textContent = 'Pay rates look good now.';
-      el.className = 'status-ok';
-      el.dataset.rateError = '';
+  // Re-derives against the actual shifts each status was blocking on
+  // (same as validateMatchedRates() elsewhere) rather than every row in
+  // Settings — otherwise this could keep an error alive over an unrelated
+  // incomplete row that was never actually in play here.
+  const parseEl = document.getElementById('parseStatus');
+  if (parseEl && parseEl.dataset.rateError === '1') {
+    const html = document.getElementById('htmlInput').value.trim();
+    let rateProblems = [];
+    if (html) {
+      try { rateProblems = validateMatchedRates(buildShifts(parseSchedule(html)).shifts); }
+      catch (e) { rateProblems = []; } // malformed paste — nothing to check yet, not a rate problem
     }
-  });
+    if (rateProblems.length) {
+      parseEl.innerHTML = '<strong>Fix your pay rates before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+      parseEl.className = 'status-warn';
+    } else {
+      parseEl.textContent = 'Pay rates look good now.';
+      parseEl.className = 'status-ok';
+      parseEl.dataset.rateError = '';
+    }
+  }
+
+  const updateEl = document.getElementById('updateTimesheetStatus');
+  if (updateEl && updateEl.dataset.rateError === '1' && lastResult) {
+    const rateProblems = validateMatchedRates(lastResult.shifts.map(s => ({ rule: classifyRate(s.type) })));
+    if (rateProblems.length) {
+      updateEl.innerHTML = '<strong>Fix your pay rates before updating:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+      updateEl.className = 'status-warn';
+    } else {
+      updateEl.textContent = 'Pay rates look good now.';
+      updateEl.className = 'status-ok';
+      updateEl.dataset.rateError = '';
+    }
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -620,7 +655,14 @@ function markRatesDirty() {
 function reapplyRatesToSheet() {
   const updateTimesheetStatus = document.getElementById('updateTimesheetStatus');
   updateTimesheetStatus.dataset.rateError = '';
-  const rateProblems = validateRates();
+  if (!lastResult) return;
+
+  // Reclassify against a scratch copy first — only commit it to the real
+  // shifts once we know the result won't get blocked, so a rejected
+  // update doesn't leave shifts pointing at rules that were never
+  // actually approved for this sheet.
+  const reclassified = lastResult.shifts.map(s => ({ shift: s, rule: classifyRate(s.type) }));
+  const rateProblems = validateMatchedRates(reclassified);
   if (rateProblems.length) {
     updateTimesheetStatus.innerHTML = '<strong>Fix your pay rates before updating:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
     updateTimesheetStatus.className = 'status-warn';
@@ -628,10 +670,7 @@ function reapplyRatesToSheet() {
     return;
   }
 
-  if (!lastResult) return;
-  lastResult.shifts.forEach(s => {
-    s.rule = classifyRate(s.type);
-  });
+  reclassified.forEach(x => { x.shift.rule = x.rule; });
   renderResults();
   updateTimesheetStatus.textContent = 'Timesheet updated.';
   updateTimesheetStatus.className = 'status-ok';
@@ -1243,23 +1282,12 @@ function runParse() {
   pendingShifts = null;
   pendingSummary = null;
 
-  // Merge before validating/parsing so a freshly-answered rule (from the
+  if (!html) { status.textContent = 'Paste some schedule HTML first.'; status.className = ''; return; }
+
+  // Merge before parsing so a freshly-answered rule (from the
   // bookmarklet's on-page prompts) is already in effect for this exact
   // parse, not just the next one.
   const addedRuleCount = mergeNewRateRules(extractEmbeddedNewRateRules(html));
-
-  // A rule with a blank pay field would silently compute $0 for anything
-  // that matches it — block parsing entirely instead, so a half-filled-in
-  // rate can't quietly ship on a real commission sheet.
-  const rateProblems = validateRates();
-  if (rateProblems.length) {
-    status.innerHTML = '<strong>Fix your pay rates before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
-    status.className = 'status-warn';
-    status.dataset.rateError = '1';
-    return;
-  }
-
-  if (!html) { status.textContent = 'Paste some schedule HTML first.'; status.className = ''; return; }
 
   let events;
   try {
@@ -1276,6 +1304,19 @@ function runParse() {
   }
 
   const { shifts: newShifts, excluded } = buildShifts(events);
+
+  // A rule with a blank pay field would silently compute $0 for anything
+  // that matches it — block on that instead, so a half-filled-in rate
+  // can't quietly ship on a real commission sheet. Only rules that
+  // actually matched something here have to be complete — see
+  // validateMatchedRates() for why.
+  const rateProblems = validateMatchedRates(newShifts);
+  if (rateProblems.length) {
+    status.innerHTML = '<strong>Fix your pay rates before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+    status.className = 'status-warn';
+    status.dataset.rateError = '1';
+    return;
+  }
 
   const existingFingerprints = new Set((lastResult ? lastResult.shifts : []).map(shiftFingerprint));
   let toAdd = [], dupes = 0;
@@ -1345,14 +1386,6 @@ function autoParseAndAdd(html) {
 
   const addedRuleCount = mergeNewRateRules(extractEmbeddedNewRateRules(html));
 
-  const rateProblems = validateRates();
-  if (rateProblems.length) {
-    showHandoffError('<strong>Fix your pay rates before this can be added:</strong><br>' +
-      rateProblems.map(escapeHtml).join('<br>') +
-      '<br>Your schedule is saved below — fix your rates in Settings, then click Parse.', html);
-    return;
-  }
-
   let events;
   try {
     events = parseSchedule(html);
@@ -1366,6 +1399,18 @@ function autoParseAndAdd(html) {
   }
 
   const { shifts: newShifts, excluded } = buildShifts(events);
+
+  // Only rules that actually matched a shift in this parse have to be
+  // complete — see validateMatchedRates() for why (a core row for a
+  // category this week's schedule never touches shouldn't block).
+  const rateProblems = validateMatchedRates(newShifts);
+  if (rateProblems.length) {
+    showHandoffError('<strong>Fix your pay rates before this can be added:</strong><br>' +
+      rateProblems.map(escapeHtml).join('<br>') +
+      '<br>Your schedule is saved below — fix your rates in Settings, then click Parse.', html);
+    return;
+  }
+
   const existingFingerprints = new Set((lastResult ? lastResult.shifts : []).map(shiftFingerprint));
   let toAdd = [], dupes = 0;
   newShifts.forEach(s => {
@@ -1564,9 +1609,11 @@ function knownSports() {
 
 // A rule with no match text is the classifyRate() fallback for a title that
 // hit nothing configured (see classifyRate) — real rules always have match
-// text, since validateRates() blocks Parse until every row has one. That
-// makes `!rule.match` a reliable signal for "this shift's $0 is a fallback,
-// not a real rate," distinct everywhere it's displayed or exported.
+// text, and validateMatchedRates() blocks Parse until any rule that
+// actually matched a shift is complete, so a shift on the sheet never
+// carries an incomplete-but-matched rule either. That makes `!rule.match`
+// a reliable signal for "this shift's $0 is a fallback, not a real rate,"
+// distinct everywhere it's displayed or exported.
 function rateLabelFor(rule) {
   if (!rule.match) return '<span class="rate-unmatched">No rate matched</span>';
   if (rule.type === 'per_person') return `$${rule.pricePerPerson ?? 0}/person &times; ${rule.coachShare ?? 0}%`;
