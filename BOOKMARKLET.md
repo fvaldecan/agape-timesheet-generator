@@ -74,22 +74,27 @@ boundary, check DevTools → Network on a real click and compare.
 
 1. Log into Club Automation like normal and open your weekly schedule.
 2. Make sure the week you want has actually loaded on screen.
-3. Click the bookmark. It opens (or reuses) a timesheet app tab in the
-   background — if your browser blocks pop-ups, allow them for Club
-   Automation and click the bookmark again. You stay on the Club
-   Automation page the whole time; the app tab doesn't steal focus.
-4. A small banner appears in the corner saying to stay on the page while
-   it works — it processes events one at a time with a short pause
-   between each to avoid hammering the server, so a busy week can take
-   5-15 seconds.
+3. Click the bookmark. It opens (or reuses) a timesheet app tab — if your
+   browser blocks pop-ups, allow them for Club Automation and click the
+   bookmark again. **In Chrome, this switches you to that tab right
+   away** — a synchronous `window.open()` is required to satisfy the
+   popup blocker, and Chrome deliberately blocks scripts from pulling
+   focus back to a backgrounded tab afterward, so there's no way around
+   that switch happening immediately. The app tab shows a "waiting for
+   your schedule from Club Automation" banner right away so it's clear
+   something's in progress, not stuck.
+4. Meanwhile, back on Club Automation (switch back to that tab if you
+   want to watch), a small banner in the corner shows scrape progress —
+   it processes events one at a time with a short pause between each to
+   avoid hammering the server, so a busy week can take 5-15 seconds.
 5. If it finds a booking type it doesn't recognize, you'll get a series
    of pop-up questions — one "set this up now?" confirmation, then either
    an hourly rate or a per-person price plus what percentage Agape keeps.
    Cancel any of them to skip that title — it'll just show $0.00 with a
    warning on your sheet until you fix it later in Settings.
 6. When it's done, the schedule is sent straight to the app tab, which
-   parses and adds it automatically, then brings that tab to the front for
-   you — no paste, no Parse click, just review the finished sheet.
+   parses and adds it automatically — no paste, no Parse click, just
+   review the finished sheet.
 7. Doing a multi-week pay period? Navigate to the next week in Club
    Automation and click the bookmark again — it reuses the same app tab
    (without reloading it) so the sheet you're building isn't lost, and

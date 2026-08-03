@@ -59,16 +59,19 @@
     }
   }
 
-  // Reclaim focus immediately, then keep reclaiming it for as long as the
-  // hand-off is in flight — window.open() firing once isn't enough on its
-  // own, since navigating a fresh tab via .location.href above can steal
-  // focus asynchronously, *after* that first reclaim already ran (the
-  // navigation and the focus call race each other). Runs the whole scrape
-  // duration (often several seconds), not just at open, and gets cleared
-  // once `delivered` is decided either way, below. This can cause a brief
-  // visible flash as focus bounces; that's an accepted tradeoff.
-  // Programmatic focus is known to differ across Chrome/Firefox/Safari —
-  // treat this as best-effort until verified live in each.
+  // Confirmed live in Chrome: this does NOT keep the coach on Club
+  // Automation. window.open() firing above already switches the active
+  // tab immediately — required to happen synchronously, in this exact
+  // gesture, or the popup blocker kills it — and Chrome deliberately
+  // blocks a backgrounded tab from calling window.focus() on itself to
+  // pull focus back (the same anti-abuse restriction that stops "pop-under"
+  // ads from doing this), so every reclaim attempt below this point is
+  // silently a no-op there. Left in as best-effort for Firefox/Safari,
+  // which may not restrict this the same way — unverified either way,
+  // and not something to invest further effort chasing in Chrome
+  // specifically (confirmed dead end, see repo history/plan notes). The
+  // app tab shows a loading indicator immediately on load precisely
+  // because this switch is expected to happen and can't be prevented.
   try { window.focus(); } catch (e) {}
   var focusReclaimTimer = appWin ? setInterval(function () {
     try { window.focus(); } catch (e) {}

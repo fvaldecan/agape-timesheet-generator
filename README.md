@@ -20,11 +20,15 @@ static files.
    (as long as the button was installed by dragging it from the app,
    which keeps that memory current; see `BOOKMARKLET.md` for the
    manual-install caveat). It then opens (or switches to) the app in a
-   browser tab and sends the schedule there directly — no copy/paste. You
-   stay on Club Automation the whole time; the app tab parses and adds the
-   schedule automatically, then brings itself to the front once it's
-   actually ready to review — no "paste your schedule" screen, no Parse
-   click, no Add to sheet click. (If the hand-off can't reach the app tab
+   browser tab and sends the schedule there directly — no copy/paste. The
+   app tab shows a "waiting for your schedule" indicator right away, then
+   parses and adds the schedule automatically once it arrives — no "paste
+   your schedule" screen, no Parse click, no Add to sheet click. (Chrome
+   switches to that tab immediately when it opens — a synchronous
+   `window.open()` is required to satisfy the popup blocker, and Chrome
+   deliberately blocks scripts from pulling focus back to a backgrounded
+   tab afterward, so that switch can't be avoided or delayed until the
+   schedule is actually ready.) (If the hand-off can't reach the app tab
    for some reason, it falls back to copying the schedule to the
    clipboard instead, with a prompt to paste it in and hit **Parse**
    manually — that fallback path still shows the found / will-add /
