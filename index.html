@@ -303,6 +303,19 @@ window.addEventListener('message', function (e) {
   }
 });
 
+// Don't wait for the first AGAPE_PING round-trip to show the loading
+// state — window.opener being set is already a strong signal this tab
+// was opened by the bookmarklet (it's only ever set by a real
+// window.open() from there), and that round-trip can itself take a
+// moment. Whether or not focus actually stays on Club Automation during
+// the scrape, a coach who does end up looking at this tab early should
+// see this immediately, not the default landing page.
+if (window.opener) {
+  const loadingBanner = document.getElementById('handoffLoadingBanner');
+  if (loadingBanner) loadingBanner.classList.remove('hidden');
+  document.getElementById('resultsSection').classList.remove('hidden');
+}
+
 // Fields left blank by the user must render as blank, not as a made-up
 // number — a $45/hr shown before anyone typed it looks like a real,
 // confirmed rate. "??" only falls through on null/undefined, so an
@@ -351,10 +364,6 @@ function renderCoreRates() {
         <span class="affix">$<input class="${missCls('rate')}" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour" aria-label="Pay per hour"${missAttr('rate')}${missPlaceholder('rate')}
           onchange="state.rates[${i}].rate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
         <span class="rate-suffix">/hr to you</span>
-        <span class="rate-x">&middot;</span>
-        <input value="${r.defaultPeople ?? 1}" type="number" min="1" class="w-40" title="Default # people for this booking type" aria-label="Default number of people for this booking type"
-          onchange="state.rates[${i}].defaultPeople=Number(this.value);saveSettings();renderRates();markRatesDirty();">
-        <span class="rate-suffix">people</span>
       `;
     }
 
@@ -1335,7 +1344,18 @@ function createStubsForUnmatched(shifts) {
   const stubs = [];
   shifts.forEach(s => {
     if (s.rule.match) return;
-    const raw = (s.rawTitle || '').trim();
+    // s.type (the display title) is what classifyRate() actually matches
+    // against, and — for anything but a PL booking — is the *specific*
+    // class name Club Automation shows, e.g. "Group class: PBALL Drill &
+    // Play AM Sessions (Level 1 & 2) - FV", not just the generic "Group
+    // class" label rawTitle holds. That specificity is exactly the point:
+    // two different classes that both happen to be labeled "Group class"
+    // should get their own separate rules, not collapse into one. Falls
+    // back to rawTitle only for a PL-prefixed title, since that display
+    // title embeds a coincidental client name rather than a reusable
+    // category — though PL is core-matched already, so this branch
+    // shouldn't actually be reachable in practice.
+    const raw = ((s.rawTitle || '').toUpperCase().startsWith('PL') ? s.rawTitle : (s.type || s.rawTitle || '')).trim();
     const key = raw.toLowerCase();
     if (!raw || seenTitle.has(key)) return;
     seenTitle.add(key);
