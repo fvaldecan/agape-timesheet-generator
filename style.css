@@ -317,6 +317,15 @@ td.num, th.num { text-align: right; font-family: var(--mono); }
   margin-top: 12px;
   font-family: var(--mono);
 }
+.info-banner {
+  background: #efeef8;
+  border-left: 4px solid var(--brand-purple);
+  color: #3a3f38;
+  font-family: var(--serif);
+  font-size: 14px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
 .warn div { margin-bottom: 4px; }
 .warn-strong {
   background: #fbe2d8;
