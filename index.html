@@ -127,6 +127,7 @@ $40/hr on programmed groups, drills, classes"
 
   <section id="resultsSection" class="hidden">
     <h2>4. Timesheet</h2>
+    <div id="handoffErrorBanner" class="warn warn-strong hidden" role="alert"></div>
     <div id="results"></div>
     <div class="actions">
       <button class="btn" onclick="printTimesheet()" data-goatcounter-click='{"path":"click-print","title":"Print / Save as PDF","event":true}'>Print / Save as PDF</button>
@@ -198,14 +199,28 @@ document.getElementById('compNotes').value = state.compNotes || '';
 // Automation weeks doesn't change which tab it is), so checking `e.source`
 // against it is both simpler and stricter than an origin string ever
 // could be here.
+// If the bookmarklet's own 8s delivery watchdog (see bookmarklet.js) fires
+// before AGAPE_SCHEDULE_DATA ever arrives, it's already showing its own
+// clipboard-copy fallback over on the Club Automation tab — there's no
+// direct signal for that (by definition, no message was ever sent), so
+// this is a heuristic: if we saw a ping but no schedule data within a
+// window comfortably past that watchdog, expand the manual paste section
+// so the recovery path doesn't require the coach to go dig for it.
+let handoffFallbackTimer = null;
 window.addEventListener('message', function (e) {
   if (!window.opener || e.source !== window.opener) return;
   if (!e.data || typeof e.data.type !== 'string') return;
   if (e.data.type === 'AGAPE_PING') {
     e.source.postMessage({ type: 'AGAPE_READY' }, e.origin);
+    if (handoffFallbackTimer === null) {
+      handoffFallbackTimer = setTimeout(function () {
+        handoffFallbackTimer = null;
+        expandPasteSection();
+      }, 9000);
+    }
   } else if (e.data.type === 'AGAPE_SCHEDULE_DATA' && typeof e.data.html === 'string') {
-    document.getElementById('htmlInput').value = e.data.html;
-    runParse();
+    if (handoffFallbackTimer !== null) { clearTimeout(handoffFallbackTimer); handoffFallbackTimer = null; }
+    autoParseAndAdd(e.data.html);
     e.source.postMessage({ type: 'AGAPE_RECEIVED' }, e.origin);
   }
 });
@@ -1165,6 +1180,97 @@ function confirmAdd() {
   renderResults();
 }
 
+// Bookmarklet hand-off path: composes parse -> validate -> build -> commit
+// directly into lastResult, atomically, skipping the pending/confirm
+// review gate that runParse()/confirmAdd() use for the manual paste flow.
+// That gate exists because pasting is the atypical/troubleshooting path —
+// something already went sideways once. A bookmarklet hand-off is the
+// opposite case: the coach already watched Club Automation's own summary
+// before it sent anything, so an extra "does this look right?" click here
+// would just be friction with no real safety benefit. Errors here can't
+// rely on status text being noticed (that text isn't the primary visible
+// surface for this path) so they get a banner on the results area itself.
+function autoParseAndAdd(html) {
+  if (sheetStartedAt === null) sheetStartedAt = Date.now();
+  saveSettings();
+
+  const addedRuleCount = mergeNewRateRules(extractEmbeddedNewRateRules(html));
+
+  const rateProblems = validateRates();
+  if (rateProblems.length) {
+    showHandoffError('<strong>Fix your pay rates before this can be added:</strong><br>' +
+      rateProblems.map(escapeHtml).join('<br>') +
+      '<br>Your schedule is saved below — fix your rates in Settings, then click Parse.', html);
+    return;
+  }
+
+  let events;
+  try {
+    events = parseSchedule(html);
+  } catch (err) {
+    showHandoffError('Could not parse the schedule Club Automation sent over — check the "Get My Schedule" button is up to date, or paste it manually below.', html);
+    return;
+  }
+  if (events.length === 0) {
+    showHandoffError('No events found in the schedule Club Automation sent over. Make sure the week you wanted had actually loaded before clicking the button.', html);
+    return;
+  }
+
+  const { shifts: newShifts, excluded } = buildShifts(events);
+  const existingFingerprints = new Set((lastResult ? lastResult.shifts : []).map(shiftFingerprint));
+  let toAdd = [], dupes = 0;
+  newShifts.forEach(s => {
+    const fp = shiftFingerprint(s);
+    if (existingFingerprints.has(fp)) { dupes++; return; }
+    existingFingerprints.add(fp);
+    toAdd.push(s);
+  });
+
+  if (!lastResult) {
+    lastResult = { shifts: [], name: document.getElementById('coachName').value || 'Coach' };
+  }
+  lastResult.shifts.push(...toAdd);
+
+  const parts = [`${toAdd.length} entr${toAdd.length === 1 ? 'y' : 'ies'} added from Club Automation.`];
+  if (addedRuleCount) parts.push(`Added ${addedRuleCount} new pay rate rule${addedRuleCount === 1 ? '' : 's'} — check ${addedRuleCount === 1 ? 'it' : 'them'} in Settings.`);
+  if (excluded.blocked.length) parts.push(`${excluded.blocked.length} blocked time (excluded, unpaid).`);
+  if (excluded.emptySlots.length) parts.push(`${excluded.emptySlots.length} empty/unbooked slot${excluded.emptySlots.length === 1 ? '' : 's'} (excluded).`);
+  if (dupes) parts.push(`${dupes} already in the sheet (skipped).`);
+
+  const status = document.getElementById('parseStatus');
+  status.textContent = parts.join(' ');
+  status.className = 'status-ok';
+  status.dataset.rateError = '';
+  document.getElementById('htmlInput').value = '';
+  pendingShifts = null;
+  pendingSummary = null;
+
+  renderResults();
+  try { document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* cosmetic only, ignore */ }
+}
+
+// Prominent, hard-to-miss failure surface for the hand-off path — unlike
+// the manual paste flow, a coach landing here from the bookmarklet isn't
+// necessarily looking at the (now-collapsed) paste section's status text.
+// Keeps the raw html in the textarea and expands that section so retrying
+// via Parse/Add to sheet is one click away, not a hunt.
+function showHandoffError(messageHtml, rawHtml) {
+  document.getElementById('htmlInput').value = rawHtml;
+  const banner = document.getElementById('handoffErrorBanner');
+  if (banner) {
+    banner.innerHTML = '&#9888; ' + messageHtml;
+    banner.classList.remove('hidden');
+  }
+  document.getElementById('resultsSection').classList.remove('hidden');
+  expandPasteSection();
+  try { banner.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* cosmetic only, ignore */ }
+}
+
+function expandPasteSection() {
+  const details = document.getElementById('pasteDetails');
+  if (details) details.open = true;
+}
+
 function clearAll() {
   if (lastResult && lastResult.shifts.length > 0) {
     if (!confirm('Clear the whole sheet and start over? This wipes every entry you\'ve added — it can\'t be undone.')) return;
@@ -1190,6 +1296,8 @@ function clearAll() {
     if (results) results.innerHTML = '';
     const dirtyBanner = document.getElementById('ratesDirtyBanner');
     if (dirtyBanner) dirtyBanner.classList.remove('banner-visible');
+    const handoffErrorBanner = document.getElementById('handoffErrorBanner');
+    if (handoffErrorBanner) handoffErrorBanner.classList.add('hidden');
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* cosmetic only, ignore */ }
   } catch (err) {
     alert('Something went wrong clearing the sheet. Try reloading the page.');
@@ -1393,6 +1501,8 @@ function renderResults() {
   const section = document.getElementById('resultsSection');
   const el = document.getElementById('results');
   section.classList.remove('hidden');
+  const handoffErrorBanner = document.getElementById('handoffErrorBanner');
+  if (handoffErrorBanner) handoffErrorBanner.classList.add('hidden');
 
   const { byLocation, grandTotal } = computeGroups(shifts);
   lastResult.grandTotal = grandTotal;
