@@ -259,6 +259,16 @@ let state = loadSettings();
 document.getElementById('coachName').value = state.name;
 document.getElementById('compNotes').value = state.compNotes || '';
 
+// Declared this early (rather than down by the rest of "UI wiring",
+// where it used to live) because renderRates() -> renderOtherRates() ->
+// rateRowGuidanceHint() reads it, and renderRates() is called at the top
+// level below, before that section of the script would otherwise run —
+// referencing a `let` before its declaration throws "Cannot access
+// 'lastResult' before initialization" (temporal dead zone), which is
+// exactly what broke every page load and, in turn, silently left
+// refreshBookmarkletButton() never called at all.
+let lastResult = null; // { shifts, name }
+
 // ---------------------------------------------------------------------
 // Bookmarklet hand-off — lets the "Get My Schedule" bookmarklet skip the
 // copy/paste step entirely. It opens this page in a new tab (or refocuses
@@ -1255,7 +1265,8 @@ function shiftNeedsAttention(shift, conflictIds) {
 // ---------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------
-let lastResult = null; // { shifts, name }
+// (lastResult itself is declared up near `state`, not here — see the
+// comment there for why.)
 
 // Whether a shift's detail panel is expanded defaults to whether it needs
 // attention (missing location/rate) — but once the coach explicitly
