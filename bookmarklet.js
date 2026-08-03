@@ -59,15 +59,20 @@
     }
   }
 
-  // Reclaim focus immediately — window.open()/the navigation above can
-  // steal it in some browsers, but the coach should stay looking at Club
-  // Automation until the app tab actually has something ready to review,
-  // not a blank/loading page. This can cause a brief visible flash as
-  // focus bounces; that's an accepted tradeoff. Still within/just after
-  // the same click gesture, so this should generally work, but
-  // programmatic focus is known to differ across Chrome/Firefox/Safari —
+  // Reclaim focus immediately, then keep reclaiming it for as long as the
+  // hand-off is in flight — window.open() firing once isn't enough on its
+  // own, since navigating a fresh tab via .location.href above can steal
+  // focus asynchronously, *after* that first reclaim already ran (the
+  // navigation and the focus call race each other). Runs the whole scrape
+  // duration (often several seconds), not just at open, and gets cleared
+  // once `delivered` is decided either way, below. This can cause a brief
+  // visible flash as focus bounces; that's an accepted tradeoff.
+  // Programmatic focus is known to differ across Chrome/Firefox/Safari —
   // treat this as best-effort until verified live in each.
   try { window.focus(); } catch (e) {}
+  var focusReclaimTimer = appWin ? setInterval(function () {
+    try { window.focus(); } catch (e) {}
+  }, 400) : null;
 
   // Start pinging the app tab now, in parallel with the scrape loop below
   // — not after it finishes — so the app tab gets the whole scrape
@@ -319,6 +324,7 @@
     });
   }
   var delivered = appWin ? await waitForAck() : false;
+  if (focusReclaimTimer !== null) clearInterval(focusReclaimTimer);
 
   if (delivered) {
     // Only now — after the schedule is actually parsed and added on the
