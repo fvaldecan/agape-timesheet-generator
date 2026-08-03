@@ -33,6 +33,12 @@
         &#128279; Get My Schedule
       </a>
     </div>
+    <div id="bookmarkletGenErrorHint" class="warn warn-strong hidden" role="alert">
+      &#9888; The button above couldn't be generated — something in your saved rates has a
+      character it choked on. It won't work if you drag it right now. Try removing or retyping
+      the match text on your most recently added "Other rates" row in Settings below, then come
+      back to this button.
+    </div>
     <div id="bookmarkletStaleHint" role="status" aria-live="polite">
       <span id="bookmarkletStaleHintText"></span>
       <button class="btn btn-compact" onclick="dismissBookmarkletStaleHint()">Dismiss</button>
@@ -736,6 +742,23 @@ function reapplyRatesToSheet() {
 
 function escapeHtml(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Defensive hardening, not a confirmed root cause: a lone/unpaired UTF-16
+// surrogate in rate match text (most plausible source: a scraped Club
+// Automation title via createStubsForUnmatched() or the bookmarklet's
+// on-page Q&A) was suspected of making encodeURIComponent() throw "URI
+// malformed" inside refreshBookmarkletButton() — but JSON.stringify()
+// already escapes a lone surrogate into safe literal text (well-formed
+// JSON.stringify, spec since ES2019) before it ever reaches
+// encodeURIComponent, so this specific mechanism doesn't actually trigger
+// — verified live, not just reasoned about. Left in anyway since it's
+// harmless and a reasonable thing to guard regardless; the real cause of
+// "button silently never gets a working href" is still open — see the
+// visible bookmarkletGenErrorHint banner below for whatever it turns out
+// to be.
+function stripLoneSurrogates(s) {
+  return (s || '').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g, m => m.length > 1 ? m[0] : '');
+}
+
 // Splits pasted contract/compensation text into clean lines, stripping
 // whatever bullet character it came in with (Word/PDF paste-ins commonly
 // use "●", "•", "-", "*", or a number) so we can re-render consistently.
@@ -787,7 +810,11 @@ renderRates();
 // button) and the stale-hint check below (compares against a stamped
 // copy) — one definition so the two can't drift apart.
 function bookmarkletRulesSnapshot() {
-  return state.rates.map(r => ({ match: r.match, matchMode: r.matchMode || 'contains' }));
+  // stripLoneSurrogates() here too, defensively — covers match text
+  // that predates mergeNewRateRules() sanitizing on the way in (typed by
+  // hand, or saved before that fix existed), so a bad character already
+  // sitting in localStorage can't keep the button broken indefinitely.
+  return state.rates.map(r => ({ match: stripLoneSurrogates(r.match), matchMode: r.matchMode || 'contains' }));
 }
 function refreshBookmarkletButton() {
   try {
@@ -800,8 +827,17 @@ function refreshBookmarkletButton() {
     if (bookmarkletBtn) bookmarkletBtn.setAttribute('href', bookmarkletCode);
     const bookmarkletCodeBox = document.getElementById('bookmarkletCode');
     if (bookmarkletCodeBox) bookmarkletCodeBox.value = bookmarkletCode;
+    const genErrorHint = document.getElementById('bookmarkletGenErrorHint');
+    if (genErrorHint) genErrorHint.classList.add('hidden');
   } catch (e) {
+    // Was previously only a console.error — completely invisible unless
+    // someone happened to have devtools open on this page at this exact
+    // moment, leaving the button silently stuck on its harmless
+    // javascript:void(0) placeholder href with no sign anything was
+    // wrong. Now it's a real, visible failure state instead.
     console.error('Could not set up the bookmarklet button:', e);
+    const genErrorHint = document.getElementById('bookmarkletGenErrorHint');
+    if (genErrorHint) genErrorHint.classList.remove('hidden');
   }
 }
 refreshBookmarkletButton();
@@ -1317,6 +1353,12 @@ function extractEmbeddedNewRateRules(html) {
 // pile up duplicate rows. Returns how many were actually added.
 function mergeNewRateRules(newRules) {
   if (!newRules.length) return 0;
+  // Scraped straight off Club Automation's HTML (via the bookmarklet's
+  // Q&A or createStubsForUnmatched()) — defensively sanitized before it
+  // ever reaches state.rates (see stripLoneSurrogates() for why this
+  // turned out not to be the thing actually breaking the button, but is
+  // worth guarding anyway).
+  newRules = newRules.map(r => Object.assign({}, r, { match: stripLoneSurrogates(r.match) }));
   const key = r => (r.match || '').trim().toLowerCase() + '|' + (r.matchMode || 'contains');
   const existing = new Set(state.rates.map(key));
   const toAdd = newRules.filter(r => !existing.has(key(r)));
