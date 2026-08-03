@@ -62,27 +62,36 @@
   <section>
     <h2>2. Paste your schedule</h2>
     <p class="hint mt-0">
-      Club Automation only shows one week at a time, so for a multi-week pay period, paste
-      each week separately. <strong>Parse</strong> shows a breakdown first (blocked, empty,
-      already added) — check it, then <strong>Add to sheet</strong>.
+      Clicked the "Get My Schedule" button? This step happens automatically — you'll land
+      here already parsed and ready to review in Step 4.
     </p>
-     <details class="mt-12">
-      <summary>Didn't set up the button?</summary>
+    <details id="pasteDetails" class="mt-12">
+      <summary>Paste it in manually instead</summary>
       <div class="detail-body">
-        <ol class="pl-18">
-          <li>Right-click page and choose <strong>Inspect</strong> (or press <strong>Ctrl+Shift+I</strong>).</li>
-          <li>In the Elements panel, find the <code>&lt;div id="court_schedule"&gt;</code> element.</li>
-          <li>Right-click it and choose <strong>Copy</strong> &rarr; <strong>Copy outerHTML</strong>.</li>
-        </ol>
+        <p class="hint mt-0">
+          Club Automation only shows one week at a time, so for a multi-week pay period, paste
+          each week separately. <strong>Parse</strong> shows a breakdown first (blocked, empty,
+          already added) — check it, then <strong>Add to sheet</strong>.
+        </p>
+        <details class="mt-12">
+          <summary>Didn't set up the button?</summary>
+          <div class="detail-body">
+            <ol class="pl-18">
+              <li>Right-click page and choose <strong>Inspect</strong> (or press <strong>Ctrl+Shift+I</strong>).</li>
+              <li>In the Elements panel, find the <code>&lt;div id="court_schedule"&gt;</code> element.</li>
+              <li>Right-click it and choose <strong>Copy</strong> &rarr; <strong>Copy outerHTML</strong>.</li>
+            </ol>
+          </div>
+        </details>
+        <label for="htmlInput" class="field-label mt-14 mb-4">Schedule HTML</label>
+        <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
+        <div class="row">
+          <button class="btn" onclick="runParse()" data-goatcounter-click='{"path":"click-parse","title":"Parse schedule","event":true}'>Parse</button>
+          <button class="btn hidden" id="confirmAddBtn" onclick="confirmAdd()" data-goatcounter-click='{"path":"click-add-to-sheet","title":"Add to sheet","event":true}'>Add to sheet</button>
+        </div>
+        <div id="parseStatus" class="row status-text" role="status" aria-live="polite"></div>
       </div>
     </details>
-    <label for="htmlInput" class="field-label mt-14 mb-4">Schedule HTML</label>
-    <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
-    <div class="row">
-      <button class="btn" onclick="runParse()" data-goatcounter-click='{"path":"click-parse","title":"Parse schedule","event":true}'>Parse</button>
-      <button class="btn hidden" id="confirmAddBtn" onclick="confirmAdd()" data-goatcounter-click='{"path":"click-add-to-sheet","title":"Add to sheet","event":true}'>Add to sheet</button>
-    </div>
-    <div id="parseStatus" class="row status-text" role="status" aria-live="polite"></div>
   </section>
 
   <section>
