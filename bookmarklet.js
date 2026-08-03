@@ -59,6 +59,16 @@
     }
   }
 
+  // Reclaim focus immediately — window.open()/the navigation above can
+  // steal it in some browsers, but the coach should stay looking at Club
+  // Automation until the app tab actually has something ready to review,
+  // not a blank/loading page. This can cause a brief visible flash as
+  // focus bounces; that's an accepted tradeoff. Still within/just after
+  // the same click gesture, so this should generally work, but
+  // programmatic focus is known to differ across Chrome/Firefox/Safari —
+  // treat this as best-effort until verified live in each.
+  try { window.focus(); } catch (e) {}
+
   // Start pinging the app tab now, in parallel with the scrape loop below
   // — not after it finishes — so the app tab gets the whole scrape
   // duration (often several seconds) to finish loading its own JS and
@@ -311,6 +321,11 @@
   var delivered = appWin ? await waitForAck() : false;
 
   if (delivered) {
+    // Only now — after the schedule is actually parsed and added on the
+    // app side (AGAPE_RECEIVED only fires once that's finished, see
+    // index.html's message listener) — bring that tab to the front. Before
+    // this point the coach stayed on Club Automation the whole time.
+    try { appWin.focus(); } catch (e) {}
     overlay.innerHTML = '';
     summaryLines.forEach(function (line, idx) {
       var lineDiv = document.createElement('div');
