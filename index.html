@@ -387,6 +387,34 @@ function setCoreRateType(i, value) {
 // and the drop handler below both refuse to swap across that boundary, so
 // a core row can never end up ahead of an ad-hoc one (or vice versa) in a
 // way that would break classifyRate()'s first-match-wins order.
+// Live-computed guidance for an incomplete "other rates" row — pulls one
+// example shift already on the sheet that this row's match text actually
+// caught, so a coach staring at a blank/auto-created row has something to
+// go on: what kind of booking this is (sport, duration, headcount), not
+// just a bare title string. Deliberately doesn't suggest a $ amount —
+// there's no signal here that could tell what someone should get paid,
+// only what the booking looks like structurally, which is what actually
+// determines flat-vs-per-person.
+function rateRowGuidanceHint(r) {
+  if (!lastResult || !rateRuleMissingFields(r).length) return '';
+  const mode = r.matchMode || 'contains';
+  const matchText = (r.match || '').trim();
+  if (!matchText) return '';
+  const matching = lastResult.shifts.filter(s => {
+    const t = s.type || '';
+    return mode === 'startsWith' ? t.toUpperCase().startsWith(matchText.toUpperCase()) : t.toLowerCase().includes(matchText.toLowerCase());
+  });
+  if (!matching.length) return '';
+  const example = matching[0];
+  const bits = [];
+  if (example.sport) bits.push(example.sport);
+  bits.push(`${example.durationHrs}hr`);
+  if (example.numPeople > 1) bits.push(`${example.numPeople} people listed`);
+  const countNote = matching.length > 1 ? ` (seen ${matching.length} times this sheet)` : '';
+  return `New — e.g. ${formatDateDisplay(example.date)}${countNote}, ${bits.join(', ')}. ` +
+    `Pick <strong>Flat $/hr</strong> if it's paid per hour, or <strong>Per-person %</strong> if everyone listed pays separately (like a group class or clinic), then fill in the pay.`;
+}
+
 function renderOtherRates() {
   const el = document.getElementById('otherRateRows');
   el.innerHTML = '';
@@ -505,6 +533,14 @@ function renderOtherRates() {
     row.querySelector('.rate-drag-handle').addEventListener('mousedown', () => { allowDrag = true; });
     row.addEventListener('mouseup', () => { allowDrag = false; });
     el.appendChild(row);
+
+    const hint = rateRowGuidanceHint(r);
+    if (hint) {
+      const hintEl = document.createElement('div');
+      hintEl.className = 'rate-hint';
+      hintEl.innerHTML = hint;
+      el.appendChild(hintEl);
+    }
   });
 }
 // New rows land just above the core section — see CORE_RATE_DEFS above
@@ -996,6 +1032,7 @@ function buildShifts(events) {
       id: shiftIdCounter++,
       date: e.date,
       type: e.title,
+      rawTitle: e.rawTitle,  // pre-display-formatting title (no client name embedded) — used to seed an auto-created rate rule's match text
       client: e.client,
       startTime: e.startTime,
       endTime: e.endTime,
@@ -1282,6 +1319,31 @@ function mergeNewRateRules(newRules) {
   return toAdd.length;
 }
 
+// For any shift whose title matched nothing configured, auto-creates an
+// editable "Other rates" row pre-filled with the raw booking title — so a
+// coach fixing this doesn't have to notice the "no matching rate rule"
+// warning, then retype the exact title text themselves. Doesn't touch the
+// rule already snapshotted on these shifts (they keep showing the
+// existing "No rate matched" warning until the coach fills the new row in
+// and clicks "Update timesheet", same reclassify-on-demand flow as any
+// other rate edit) — reclassifying immediately would swap that
+// hard-to-miss warning for a quiet "$0/hr", which is worse, not better.
+// Reuses mergeNewRateRules() for the actual insert, so it dedupes and
+// stays ahead of the core rows the same way everywhere else does.
+function createStubsForUnmatched(shifts) {
+  const seenTitle = new Set();
+  const stubs = [];
+  shifts.forEach(s => {
+    if (s.rule.match) return;
+    const raw = (s.rawTitle || '').trim();
+    const key = raw.toLowerCase();
+    if (!raw || seenTitle.has(key)) return;
+    seenTitle.add(key);
+    stubs.push({ match: raw, matchMode: 'startsWith', type: 'hourly', mode: 'flat', defaultPeople: 1 });
+  });
+  return mergeNewRateRules(stubs);
+}
+
 function runParse() {
   if (sheetStartedAt === null) sheetStartedAt = Date.now();
   saveSettings();
@@ -1369,6 +1431,7 @@ function confirmAdd() {
     lastResult = { shifts: [], name: document.getElementById('coachName').value || 'Coach' };
   }
   lastResult.shifts.push(...pendingShifts);
+  createStubsForUnmatched(pendingShifts);
 
   const status = document.getElementById('parseStatus');
   status.textContent = `Added. Sheet now has ${lastResult.shifts.length} total entries.`;
@@ -1435,6 +1498,7 @@ function autoParseAndAdd(html) {
     lastResult = { shifts: [], name: document.getElementById('coachName').value || 'Coach' };
   }
   lastResult.shifts.push(...toAdd);
+  createStubsForUnmatched(toAdd);
 
   const parts = [`${toAdd.length} entr${toAdd.length === 1 ? 'y' : 'ies'} added from Club Automation.`];
   if (addedRuleCount) parts.push(`Added ${addedRuleCount} new pay rate rule${addedRuleCount === 1 ? '' : 's'} — check ${addedRuleCount === 1 ? 'it' : 'them'} in Settings.`);

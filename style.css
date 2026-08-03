@@ -145,6 +145,7 @@ summary {
 .rate-move-btn:hover:not(:disabled) { color: var(--brand-purple); border-color: var(--brand-purple); }
 .rate-move-btn:disabled { opacity: 0.3; cursor: default; }
 .rate-row.rate-row-incomplete { border-left: 3px solid var(--warn); }
+.rate-hint { font-size: 12px; color: #5a5f57; font-family: var(--serif); margin: -4px 0 10px 8px; }
 .rate-core-label { font-family: var(--mono); font-size: 12px; font-weight: 600; color: #3a3f38; flex: 0 0 190px; }
 .rate-row input.field-missing { border-color: var(--warn); background: var(--warn-dim); }
 .rate-row input.field-missing::placeholder { color: var(--warn); opacity: 1; }
