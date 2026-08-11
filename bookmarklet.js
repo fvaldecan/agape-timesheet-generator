@@ -5,6 +5,7 @@
   // self-hosted deployment still works) — this hardcoded default only
   // applies when the code here is installed by hand.
   var APP_URL = 'https://fvaldecan.github.io/agape-timesheet-generator/';
+  var APP_ORIGIN = new URL(APP_URL).origin;
 
   if (window.location.hostname.indexOf('clubautomation.com') === -1) {
     alert('This button only works on your Club Automation schedule page. Go there first, open your weekly schedule, then click this again.');
@@ -43,6 +44,32 @@
     if (isFreshTab) {
       try { appWin.location.href = APP_URL; } catch (e) { appWin = null; }
     }
+  }
+
+  // Start pinging the app tab now, in parallel with the scrape loop below
+  // — not after it finishes — so the app tab gets the whole scrape
+  // duration (often several seconds) to finish loading its own JS and
+  // register its listener, instead of a cold start eating into the later
+  // send-timeout. Purely reactive on the app's side (see index.html): it
+  // replies AGAPE_READY to any ping, whether it just finished loading or
+  // has been sitting open since a previous week.
+  //
+  // One listener handles both message types for the whole run: AGAPE_READY
+  // just flips a flag, AGAPE_RECEIVED calls whatever waitForAck() below has
+  // currently registered as onScheduleReceived (null until it's waiting).
+  var appReady = false;
+  var pingTimer = null;
+  var onScheduleReceived = null;
+  if (appWin) {
+    pingTimer = setInterval(function () {
+      if (appReady) { clearInterval(pingTimer); return; }
+      try { appWin.postMessage({ type: 'AGAPE_PING' }, APP_ORIGIN); } catch (e) {}
+    }, 300);
+    window.addEventListener('message', function (e) {
+      if (e.source !== appWin || !e.data) return;
+      if (e.data.type === 'AGAPE_READY') appReady = true;
+      else if (e.data.type === 'AGAPE_RECEIVED' && onScheduleReceived) onScheduleReceived();
+    });
   }
 
   var overlay = document.createElement('div');
@@ -145,9 +172,60 @@
   if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.');
   var msg = summaryLines.join('\n');
 
-  // Copying happens on a click of the button below, not automatically here —
-  // by the time the scraping loop above finishes, the user's original click
-  // gesture has gone stale in Safari and both the Clipboard API and the
+  // Hand the scrape off to the app tab: send once the app has confirmed
+  // it's listening (AGAPE_READY) AND the scrape above has finished,
+  // whichever happens last. An 8s watchdog covers both "the app never
+  // became ready" and "it became ready but never acknowledged receipt" —
+  // on timeout (or if window.open never got a tab at all), delivered stays
+  // false and the code below falls back to today's copy-to-clipboard flow,
+  // so a coach is never stuck with no recourse.
+  function waitForAck() {
+    return new Promise(function (resolve) {
+      var settled = false;
+      var to = setTimeout(function () {
+        if (!settled) { settled = true; onScheduleReceived = null; resolve(false); }
+      }, 8000);
+      onScheduleReceived = function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(to);
+        onScheduleReceived = null;
+        resolve(true);
+      };
+      (function trySend() {
+        if (settled) return;
+        if (appReady) {
+          try {
+            appWin.postMessage({ type: 'AGAPE_SCHEDULE_DATA', html: htmlOut, newRateRules: [] }, APP_ORIGIN);
+          } catch (e) {}
+        } else {
+          setTimeout(trySend, 300);
+        }
+      })();
+    });
+  }
+  var delivered = appWin ? await waitForAck() : false;
+
+  if (delivered) {
+    overlay.innerHTML = '';
+    summaryLines.forEach(function (line, idx) {
+      var lineDiv = document.createElement('div');
+      lineDiv.textContent = line;
+      lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:' + (idx > 0 ? '0.85' : '1') + ' !important;font-size:' + (idx > 0 ? '13px' : '14px') + ' !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:' + (idx > 0 ? '6px' : '0') + ' !important;';
+      overlay.appendChild(lineDiv);
+    });
+    var doneLine = document.createElement('div');
+    doneLine.textContent = 'Sent to the timesheet app — check that tab.';
+    doneLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;font-weight:600 !important;';
+    overlay.appendChild(doneLine);
+    setTimeout(function () { overlay.remove(); }, 3000);
+    return;
+  }
+
+  // Fallback: copying happens on a click of the button below, not
+  // automatically here — by the time the scraping loop (and the failed
+  // hand-off attempt) above finishes, the user's original click gesture
+  // has gone stale in Safari and both the Clipboard API and the
   // execCommand fallback silently fail. A fresh click gives a fresh gesture.
   function onCopyDone(success) {
     overlay.remove();
@@ -159,14 +237,18 @@
   }
 
   overlay.innerHTML = '';
-  summaryLines.forEach(function (line, idx) {
+  var whyLine = document.createElement('div');
+  whyLine.textContent = "Couldn't reach the timesheet app tab automatically.";
+  whyLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;';
+  overlay.appendChild(whyLine);
+  summaryLines.forEach(function (line) {
     var lineDiv = document.createElement('div');
     lineDiv.textContent = line;
-    lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:' + (idx > 0 ? '0.85' : '1') + ' !important;font-size:' + (idx > 0 ? '13px' : '14px') + ' !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:' + (idx > 0 ? '6px' : '0') + ' !important;';
+    lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:0.85 !important;font-size:13px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:6px !important;';
     overlay.appendChild(lineDiv);
   });
   var hint = document.createElement('div');
-  hint.textContent = 'Click below to copy it.';
+  hint.textContent = 'Click below to copy it, then paste into the app tab.';
   hint.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;margin-bottom:10px !important;';
   overlay.appendChild(hint);
   var copyBtn = document.createElement('button');
