@@ -33,6 +33,16 @@
         &#128279; Get My Schedule
       </a>
     </div>
+    <div id="bookmarkletGenErrorHint" class="warn warn-strong hidden" role="alert">
+      &#9888; The button above couldn't be generated — something in your saved rates has a
+      character it choked on. It won't work if you drag it right now. Try removing or retyping
+      the match text on your most recently added "Other rates" row in Settings below, then come
+      back to this button.
+    </div>
+    <div id="bookmarkletStaleHint" role="status" aria-live="polite">
+      <span id="bookmarkletStaleHintText"></span>
+      <button class="btn btn-compact" onclick="dismissBookmarkletStaleHint()">Dismiss</button>
+    </div>
     <details class="mt-12">
       <summary>Dragging isn't working? Copy and paste it in instead</summary>
       <div class="detail-body">
@@ -58,27 +68,36 @@
   <section>
     <h2>2. Paste your schedule</h2>
     <p class="hint mt-0">
-      Club Automation only shows one week at a time, so for a multi-week pay period, paste
-      each week separately. <strong>Parse</strong> shows a breakdown first (blocked, empty,
-      already added) — check it, then <strong>Add to sheet</strong>.
+      Clicked the "Get My Schedule" button? This step happens automatically — you'll land
+      here already parsed and ready to review in Step 4.
     </p>
-     <details class="mt-12">
-      <summary>Didn't set up the button?</summary>
+    <details id="pasteDetails" class="mt-12">
+      <summary>Paste it in manually instead</summary>
       <div class="detail-body">
-        <ol class="pl-18">
-          <li>Right-click page and choose <strong>Inspect</strong> (or press <strong>Ctrl+Shift+I</strong>).</li>
-          <li>In the Elements panel, find the <code>&lt;div id="court_schedule"&gt;</code> element.</li>
-          <li>Right-click it and choose <strong>Copy</strong> &rarr; <strong>Copy outerHTML</strong>.</li>
-        </ol>
+        <p class="hint mt-0">
+          Club Automation only shows one week at a time, so for a multi-week pay period, paste
+          each week separately. <strong>Parse</strong> shows a breakdown first (blocked, empty,
+          already added) — check it, then <strong>Add to sheet</strong>.
+        </p>
+        <details class="mt-12">
+          <summary>Didn't set up the button?</summary>
+          <div class="detail-body">
+            <ol class="pl-18">
+              <li>Right-click page and choose <strong>Inspect</strong> (or press <strong>Ctrl+Shift+I</strong>).</li>
+              <li>In the Elements panel, find the <code>&lt;div id="court_schedule"&gt;</code> element.</li>
+              <li>Right-click it and choose <strong>Copy</strong> &rarr; <strong>Copy outerHTML</strong>.</li>
+            </ol>
+          </div>
+        </details>
+        <label for="htmlInput" class="field-label mt-14 mb-4">Schedule HTML</label>
+        <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
+        <div class="row">
+          <button class="btn" onclick="runParse()" data-goatcounter-click='{"path":"click-parse","title":"Parse schedule","event":true}'>Parse</button>
+          <button class="btn hidden" id="confirmAddBtn" onclick="confirmAdd()" data-goatcounter-click='{"path":"click-add-to-sheet","title":"Add to sheet","event":true}'>Add to sheet</button>
+        </div>
+        <div id="parseStatus" class="row status-text" role="status" aria-live="polite"></div>
       </div>
     </details>
-    <label for="htmlInput" class="field-label mt-14 mb-4">Schedule HTML</label>
-    <textarea id="htmlInput" placeholder="Paste the copied schedule HTML here..."></textarea>
-    <div class="row">
-      <button class="btn" onclick="runParse()" data-goatcounter-click='{"path":"click-parse","title":"Parse schedule","event":true}'>Parse</button>
-      <button class="btn hidden" id="confirmAddBtn" onclick="confirmAdd()" data-goatcounter-click='{"path":"click-add-to-sheet","title":"Add to sheet","event":true}'>Add to sheet</button>
-    </div>
-    <div id="parseStatus" class="row status-text" role="status" aria-live="polite"></div>
   </section>
 
   <section>
@@ -90,15 +109,22 @@
 
     <details open>
       <summary>Pay rates</summary>
-      <div class="config-grid" id="rateRows"></div>
-      <button class="btn secondary mt-6" onclick="addRateRow()">+ add a rate</button>
-      <p class="hint-sm mt-8">
-        Type a word from your booking titles (like "PL" or "Drill"), choose
-        <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
-        match wins, so put specific rows above general ones. <strong>Per-person split</strong> is
-        for group classes paid per attendee — you'll enter the headcount after pasting. "# people"
-        is editable on every row (handy for a semi-private with 2 students).
+      <p class="hint-sm mt-0">
+        Your three core booking types — always here, can't be removed. Pick <strong>flat
+        $/hr</strong> or <strong>per-person</strong> for each, then fill in the pay. "#
+        people" is editable (handy for a semi-private with 2 students).
       </p>
+      <div class="config-grid" id="coreRateRows"></div>
+
+      <p class="hint-sm mt-14 mb-4">
+        <strong>Other rates</strong> — for booking types that aren't PL/GL/PHS (titles the
+        "Get My Schedule" button asked you about, or ones you add yourself). Type a word
+        from the title, choose <strong>start</strong> or <strong>anywhere</strong>, and set
+        the pay. First match wins, so put specific rows above general ones.
+      </p>
+      <div class="config-grid" id="otherRateRows"></div>
+      <button class="btn secondary mt-6" onclick="addRateRow()">+ add a rate</button>
+
       <div id="ratesDirtyBanner" role="status" aria-live="polite">
         <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
         <button class="btn btn-compact" onclick="reapplyRatesToSheet()">Update timesheet</button>
@@ -123,6 +149,10 @@ $40/hr on programmed groups, drills, classes"
 
   <section id="resultsSection" class="hidden">
     <h2>4. Timesheet</h2>
+    <div id="handoffLoadingBanner" class="info-banner hidden" role="status" aria-live="polite">
+      &#9203; Waiting for your schedule from Club Automation — keep that tab open...
+    </div>
+    <div id="handoffErrorBanner" class="warn warn-strong hidden" role="alert"></div>
     <div id="results"></div>
     <div class="actions">
       <button class="btn" onclick="printTimesheet()" data-goatcounter-click='{"path":"click-print","title":"Print / Save as PDF","event":true}'>Print / Save as PDF</button>
@@ -146,10 +176,66 @@ $40/hr on programmed groups, drills, classes"
 // pricing mode) are still filled in as a starting template; each coach fills
 // in their own $ amounts in Settings on first use, and the app's own
 // "missing field" highlighting guides them to do it.
-const DEFAULT_RATES = [
-  { match: "PL", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
-  { match: "group class", matchMode: "contains", type: "per_person", coachShare: 50 },
+// GL and PHS are best-guess abbreviations, not confirmed Club Automation
+// title text — the coach's own naming is inconsistent in practice, per
+// direct confirmation, which is exactly what the bookmarklet's on-page
+// "what should this pay?" prompt exists to backstop: whatever these two
+// rows don't catch just gets asked about once and saved as its own rule.
+// Fixed, pinned to the "Pay rates" section's core table — these three
+// always exist and can't be removed/reordered by the coach (see
+// ensureCoreRates() below and renderCoreRates()). `core` is the tag that
+// marks a row as one of these, matched by category key, not array
+// position — position is only ever "always last" (enforced by
+// ensureCoreRates()), so an ad-hoc/specific rule (prepended by
+// mergeNewRateRules) keeps outranking these three under classifyRate()'s
+// first-match-wins order.
+const CORE_RATE_DEFS = [
+  { core: 'PL', match: 'PL', label: 'Private Lesson (PL)' },
+  { core: 'GL', match: 'GL', label: 'Group Lesson (GL)' },
+  { core: 'PHS', match: 'PHS', label: 'Private Hitting Session (PHS)' },
 ];
+
+// Pay figures are intentionally left blank — this is a public repo, so no
+// real Agape rate numbers ship in the source. The row shapes (title match +
+// pricing mode) are still filled in as a starting template; each coach fills
+// in their own $ amounts in Settings on first use, and the app's own
+// "missing field" highlighting guides them to do it.
+// GL and PHS are best-guess abbreviations, not confirmed Club Automation
+// title text — the coach's own naming is inconsistent in practice, per
+// direct confirmation, which is exactly what the bookmarklet's on-page
+// "what should this pay?" prompt exists to backstop: whatever these two
+// rows don't catch just gets asked about once and saved as its own rule.
+const DEFAULT_RATES = [
+  { core: 'PL', match: "PL", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
+  { core: 'GL', match: "GL", matchMode: "startsWith", type: "per_person", coachShare: 50 },
+  { core: 'PHS', match: "PHS", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
+];
+
+// Guarantees the three core categories always exist and always sit last
+// in state.rates (see CORE_RATE_DEFS above for why last matters). Runs on
+// *every* load, not just a coach's first one after this redesign shipped
+// — so it has to recognize a row it already tagged `core` on a previous
+// save (matched by tag) just as reliably as a pre-redesign row that
+// predates the tag entirely (matched by text, case-insensitive
+// startsWith). Getting this wrong in either direction either duplicates
+// the row or, worse, silently drops whatever $ amounts a coach already
+// entered back to blank on the next reload.
+function ensureCoreRates(rates) {
+  const remaining = rates.slice();
+  const coreRows = CORE_RATE_DEFS.map(def => {
+    let idx = remaining.findIndex(r => r.core === def.core);
+    if (idx === -1) {
+      idx = remaining.findIndex(r => !r.core && (r.match || '').trim().toUpperCase() === def.match && (r.matchMode || 'contains') === 'startsWith');
+    }
+    if (idx !== -1) {
+      const existing = remaining[idx];
+      remaining.splice(idx, 1);
+      return Object.assign({}, existing, { core: def.core, match: def.match, matchMode: 'startsWith' });
+    }
+    return { core: def.core, match: def.match, matchMode: 'startsWith', type: 'hourly', mode: 'flat', defaultPeople: 1 };
+  });
+  return remaining.concat(coreRows);
+}
 
 function loadSettings() {
   let rates;
@@ -158,6 +244,7 @@ function loadSettings() {
   } catch (e) {
     rates = DEFAULT_RATES; // corrupted saved data — fall back rather than crash the whole page
   }
+  rates = ensureCoreRates(rates);
   const name = localStorage.getItem('ts_name') || '';
   const compNotes = localStorage.getItem('ts_compNotes') || '';
   return { rates, name, compNotes };
@@ -172,16 +259,194 @@ let state = loadSettings();
 document.getElementById('coachName').value = state.name;
 document.getElementById('compNotes').value = state.compNotes || '';
 
+// Declared this early (rather than down by the rest of "UI wiring",
+// where it used to live) because renderRates() -> renderOtherRates() ->
+// rateRowGuidanceHint() reads it, and renderRates() is called at the top
+// level below, before that section of the script would otherwise run —
+// referencing a `let` before its declaration throws "Cannot access
+// 'lastResult' before initialization" (temporal dead zone), which is
+// exactly what broke every page load and, in turn, silently left
+// refreshBookmarkletButton() never called at all.
+let lastResult = null; // { shifts, name }
+
+// ---------------------------------------------------------------------
+// Bookmarklet hand-off — lets the "Get My Schedule" bookmarklet skip the
+// copy/paste step entirely. It opens this page in a new tab (or refocuses
+// an already-open one from a previous week) and pings us; we reply so it
+// knows we're listening — whether we just finished loading or have been
+// sitting open for a while — then it posts the scraped schedule once it's
+// confirmed we're ready.
+//
+// Trust is anchored on `e.source === window.opener`, not on origin: Club
+// Automation's actual origin varies per club (a subdomain per gym), so
+// there's no fixed origin to allowlist. `window.opener` is only ever set
+// if this tab was opened via window.open() from that bookmarklet, and it
+// stays valid across that other tab's own navigations (switching Club
+// Automation weeks doesn't change which tab it is), so checking `e.source`
+// against it is both simpler and stricter than an origin string ever
+// could be here.
+// If the bookmarklet's own 8s delivery watchdog (see bookmarklet.js) fires
+// before AGAPE_SCHEDULE_DATA ever arrives, it's already showing its own
+// clipboard-copy fallback over on the Club Automation tab — there's no
+// direct signal for that (by definition, no message was ever sent), so
+// this is a heuristic: if we saw a ping but no schedule data within a
+// window comfortably past that watchdog, expand the manual paste section
+// so the recovery path doesn't require the coach to go dig for it.
+let handoffFallbackTimer = null;
+window.addEventListener('message', function (e) {
+  if (!window.opener || e.source !== window.opener) return;
+  if (!e.data || typeof e.data.type !== 'string') return;
+  if (e.data.type === 'AGAPE_PING') {
+    e.source.postMessage({ type: 'AGAPE_READY' }, e.origin);
+    if (handoffFallbackTimer === null) {
+      handoffFallbackTimer = setTimeout(function () {
+        handoffFallbackTimer = null;
+        expandPasteSection();
+      }, 9000);
+      // First ping of this run — a hand-off is incoming, but there's
+      // nothing to show yet (the scrape on the Club Automation side can
+      // take several more seconds). Surface that now rather than leaving
+      // this tab looking idle if a coach happens to glance over at it
+      // before autoParseAndAdd() below actually has something to show.
+      const loadingBanner = document.getElementById('handoffLoadingBanner');
+      if (loadingBanner) loadingBanner.classList.remove('hidden');
+      document.getElementById('resultsSection').classList.remove('hidden');
+    }
+  } else if (e.data.type === 'AGAPE_SCHEDULE_DATA' && typeof e.data.html === 'string') {
+    if (handoffFallbackTimer !== null) { clearTimeout(handoffFallbackTimer); handoffFallbackTimer = null; }
+    autoParseAndAdd(e.data.html);
+    e.source.postMessage({ type: 'AGAPE_RECEIVED' }, e.origin);
+  }
+});
+
+// Don't wait for the first AGAPE_PING round-trip to show the loading
+// state — window.opener being set is already a strong signal this tab
+// was opened by the bookmarklet (it's only ever set by a real
+// window.open() from there), and that round-trip can itself take a
+// moment. Whether or not focus actually stays on Club Automation during
+// the scrape, a coach who does end up looking at this tab early should
+// see this immediately, not the default landing page.
+if (window.opener) {
+  const loadingBanner = document.getElementById('handoffLoadingBanner');
+  if (loadingBanner) loadingBanner.classList.remove('hidden');
+  document.getElementById('resultsSection').classList.remove('hidden');
+}
+
 // Fields left blank by the user must render as blank, not as a made-up
 // number — a $45/hr shown before anyone typed it looks like a real,
 // confirmed rate. "??" only falls through on null/undefined, so an
 // explicit 0 the user typed still displays as 0.
+//
+// Renders both halves of the "Pay rates" section — the three fixed core
+// rows and the freeform "other rates" list — and is the one entry point
+// everything else calls after mutating state.rates, same as before this
+// was split in two.
 function renderRates() {
-  const el = document.getElementById('rateRows');
+  renderCoreRates();
+  renderOtherRates();
+}
+
+// The three core categories (PL/GL/PHS): no match text, no matchMode, no
+// drag/remove — just a type toggle (flat $/hr vs per-person %) and the 1-2
+// number fields that type needs. Deliberately skips the "split" pricing
+// mode the freeform rows below still offer — this table is the "just
+// input your rates" simple path, not the full editor.
+function renderCoreRates() {
+  const el = document.getElementById('coreRateRows');
+  if (!el) return;
+  el.innerHTML = '';
+  CORE_RATE_DEFS.forEach(def => {
+    const i = state.rates.findIndex(r => r.core === def.core);
+    if (i === -1) return; // ensureCoreRates() guarantees this on every load; only reachable if something else deleted it
+    const r = state.rates[i];
+    const missing = rateRuleMissingFields(r);
+    const missCls = field => missing.includes(field) ? ' field-missing' : '';
+    const missAttr = field => missing.includes(field) ? ' aria-invalid="true"' : '';
+    const missPlaceholder = field => missing.includes(field) ? ' placeholder="required"' : '';
+
+    let typeFields;
+    if (r.type === 'per_person') {
+      typeFields = `
+        <span class="affix">$<input class="${missCls('pricePerPerson')}" value="${r.pricePerPerson ?? ''}" type="number" step="0.01" title="Price charged per person" aria-label="Price charged per person"${missAttr('pricePerPerson')}${missPlaceholder('pricePerPerson')}
+          onchange="state.rates[${i}].pricePerPerson=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
+        <span class="rate-suffix">per person</span>
+        <span class="rate-x">&times;</span>
+        <span class="affix"><input class="${missCls('coachShare')}" value="${r.coachShare ?? ''}" type="number" title="Percent of that price that goes to the coach" aria-label="Percent of that price that goes to the coach"${missAttr('coachShare')}${missPlaceholder('coachShare')}
+          onchange="state.rates[${i}].coachShare=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();">%</span>
+        <span class="rate-suffix">to coach</span>
+      `;
+    } else {
+      typeFields = `
+        <span class="affix">$<input class="${missCls('rate')}" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour" aria-label="Pay per hour"${missAttr('rate')}${missPlaceholder('rate')}
+          onchange="state.rates[${i}].rate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
+        <span class="rate-suffix">/hr to you</span>
+      `;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'rate-row rate-row-core' + (missing.length ? ' rate-row-incomplete' : '');
+    row.innerHTML = `
+      <span class="rate-core-label">${escapeHtml(def.label)}</span>
+      <select class="rate-type" aria-label="Rate type for ${escapeHtml(def.label)}" onchange="setCoreRateType(${i}, this.value)">
+        <option value="hourly" ${r.type !== 'per_person' ? 'selected' : ''}>Flat $/hr</option>
+        <option value="per_person" ${r.type === 'per_person' ? 'selected' : ''}>Per-person %</option>
+      </select>
+      <span class="rate-fields">${typeFields}</span>
+    `;
+    el.appendChild(row);
+  });
+}
+function setCoreRateType(i, value) {
+  state.rates[i].type = value;
+  if (value !== 'per_person') state.rates[i].mode = 'flat'; // no "split" pricing on core rows — see renderCoreRates()
+  renderRates();
+  saveSettings();
+  markRatesDirty();
+}
+
+// The freeform "other rates" list — ad-hoc rules (from the bookmarklet's
+// on-page prompt, or added by hand) that don't fit one of the three core
+// categories above. Full editor: match text, matchMode, drag/keyboard
+// reorder, remove. Always skips core rows (rendered separately above) and
+// only ever touches/reorders within this non-core subset — moveRateRow()
+// and the drop handler below both refuse to swap across that boundary, so
+// a core row can never end up ahead of an ad-hoc one (or vice versa) in a
+// way that would break classifyRate()'s first-match-wins order.
+// Live-computed guidance for an incomplete "other rates" row — pulls one
+// example shift already on the sheet that this row's match text actually
+// caught, so a coach staring at a blank/auto-created row has something to
+// go on: what kind of booking this is (sport, duration, headcount), not
+// just a bare title string. Deliberately doesn't suggest a $ amount —
+// there's no signal here that could tell what someone should get paid,
+// only what the booking looks like structurally, which is what actually
+// determines flat-vs-per-person.
+function rateRowGuidanceHint(r) {
+  if (!lastResult || !rateRuleMissingFields(r).length) return '';
+  const mode = r.matchMode || 'contains';
+  const matchText = (r.match || '').trim();
+  if (!matchText) return '';
+  const matching = lastResult.shifts.filter(s => {
+    const t = s.type || '';
+    return mode === 'startsWith' ? t.toUpperCase().startsWith(matchText.toUpperCase()) : t.toLowerCase().includes(matchText.toLowerCase());
+  });
+  if (!matching.length) return '';
+  const example = matching[0];
+  const bits = [];
+  if (example.sport) bits.push(example.sport);
+  bits.push(`${example.durationHrs}hr`);
+  if (example.numPeople > 1) bits.push(`${example.numPeople} people listed`);
+  const countNote = matching.length > 1 ? ` (seen ${matching.length} times this sheet)` : '';
+  return `New — e.g. ${formatDateDisplay(example.date)}${countNote}, ${bits.join(', ')}. ` +
+    `Pick <strong>Flat $/hr</strong> if it's paid per hour, or <strong>Per-person %</strong> if everyone listed pays separately (like a group class or clinic), then fill in the pay.`;
+}
+
+function renderOtherRates() {
+  const el = document.getElementById('otherRateRows');
   el.innerHTML = '';
   let dragSrcIndex = null;
 
   state.rates.forEach((r, i) => {
+    if (r.core) return;
     const missing = rateRuleMissingFields(r);
     const missCls = field => missing.includes(field) ? ' field-missing' : '';
 
@@ -211,6 +476,7 @@ function renderRates() {
       e.preventDefault();
       row.classList.remove('drag-over');
       if (dragSrcIndex === null || dragSrcIndex === i) return;
+      if (state.rates[dragSrcIndex].core || state.rates[i].core) return; // never drag across the core-row boundary
       const [moved] = state.rates.splice(dragSrcIndex, 1);
       state.rates.splice(i, 0, moved);
       dragSrcIndex = null;
@@ -274,7 +540,7 @@ function renderRates() {
       <span class="rate-drag-handle" title="Drag to reorder — first match wins" aria-hidden="true">&#10495;</span>
       <span class="rate-reorder">
         <button type="button" class="rate-move-btn" aria-label="Move ${escapeHtml(rowLabel)} up" title="Move up" onclick="moveRateRow(${i}, -1)"${i === 0 ? ' disabled' : ''}>&#9650;</button>
-        <button type="button" class="rate-move-btn" aria-label="Move ${escapeHtml(rowLabel)} down" title="Move down" onclick="moveRateRow(${i}, 1)"${i === state.rates.length - 1 ? ' disabled' : ''}>&#9660;</button>
+        <button type="button" class="rate-move-btn" aria-label="Move ${escapeHtml(rowLabel)} down" title="Move down" onclick="moveRateRow(${i}, 1)"${(i === state.rates.length - 1 || state.rates[i + 1].core) ? ' disabled' : ''}>&#9660;</button>
       </span>
       <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="${missing.includes('match') ? 'Title text... (required)' : 'Title text...'}" aria-label="Match text from booking title"${missAttr('match')}
         onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
@@ -292,10 +558,23 @@ function renderRates() {
     row.querySelector('.rate-drag-handle').addEventListener('mousedown', () => { allowDrag = true; });
     row.addEventListener('mouseup', () => { allowDrag = false; });
     el.appendChild(row);
+
+    const hint = rateRowGuidanceHint(r);
+    if (hint) {
+      const hintEl = document.createElement('div');
+      hintEl.className = 'rate-hint';
+      hintEl.innerHTML = hint;
+      el.appendChild(hintEl);
+    }
   });
 }
+// New rows land just above the core section — see CORE_RATE_DEFS above
+// for why the core rows must stay physically last in state.rates.
 function addRateRow() {
-  state.rates.push({ match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', defaultPeople: 1 });
+  const newRow = { match: '', matchMode: 'contains', type: 'hourly', mode: 'flat', defaultPeople: 1 };
+  const coreStart = state.rates.findIndex(r => r.core);
+  if (coreStart === -1) state.rates.push(newRow);
+  else state.rates.splice(coreStart, 0, newRow);
   renderRates();
   markRatesDirty();
 }
@@ -303,10 +582,12 @@ function addRateRow() {
 // Keyboard-operable equivalent of the mouse-only drag-to-reorder below —
 // order is meaningful ("first match wins"), so it can't be mouse-only.
 // Swaps two adjacent rows in place; out-of-range moves (top row up,
-// bottom row down) are no-ops rather than errors.
+// bottom row down) are no-ops rather than errors. Also refuses to swap
+// across the core-row boundary, same as the drag/drop handler above.
 function moveRateRow(i, direction) {
   const j = i + direction;
   if (j < 0 || j >= state.rates.length) return;
+  if (state.rates[i].core || state.rates[j].core) return;
   [state.rates[i], state.rates[j]] = [state.rates[j], state.rates[i]];
   renderRates();
   saveSettings();
@@ -358,18 +639,28 @@ function rateRuleMissingFields(r) {
   }
   return missing;
 }
-function validateRates() {
+// Parse-time gate: only a rule that actually matched a shift *in this
+// parse* has to be complete. The three core rows (PL/GL/PHS) can't be
+// deleted the way an ad-hoc row can, so a coach who genuinely never books
+// one of those categories (say, no PHS this week — or ever) would
+// otherwise be blocked forever by a rule they have no reason to fill in.
+// A rule that's incomplete and unused just stays incomplete — still
+// flagged in Settings — until a shift actually needs it. A rule with a
+// blank pay field that *does* match something still blocks, same
+// reasoning as before: it can't silently compute $0 on a real commission
+// sheet.
+function validateMatchedRates(shifts) {
   const problems = [];
-  if (state.rates.length === 0) {
-    problems.push('No pay rate rules configured — every booking would compute as $0. Add at least one rate below.');
-    return problems;
-  }
-  state.rates.forEach((r, i) => {
+  const seen = new Set();
+  shifts.forEach(s => {
+    const r = s.rule;
+    if (!r.match) return; // no rule matched at all — the "no matching rate rule" warning covers this, not this gate
     const missing = rateRuleMissingFields(r);
-    if (missing.length) {
-      const label = r.match ? `"${r.match}"` : '(no match text yet)';
-      problems.push(`Rate row ${i + 1} ${label}: missing ${missing.map(f => RATE_FIELD_LABELS[f]).join(', ')}.`);
-    }
+    if (!missing.length) return;
+    const key = r.match.trim().toLowerCase() + '|' + (r.matchMode || 'contains');
+    if (seen.has(key)) return;
+    seen.add(key);
+    problems.push(`"${r.match}": missing ${missing.map(f => RATE_FIELD_LABELS[f]).join(', ')}.`);
   });
   return problems;
 }
@@ -381,22 +672,40 @@ function validateRates() {
 // what makes the status text live, matching the field-level highlighting
 // that already recomputes on every edit.
 function refreshRateStatusOnEdit() {
-  [
-    ['parseStatus', 'parsing'],
-    ['updateTimesheetStatus', 'updating'],
-  ].forEach(([id, verb]) => {
-    const el = document.getElementById(id);
-    if (!el || el.dataset.rateError !== '1') return;
-    const rateProblems = validateRates();
-    if (rateProblems.length) {
-      el.innerHTML = `<strong>Fix your pay rates before ${verb}:</strong><br>` + rateProblems.map(escapeHtml).join('<br>');
-      el.className = 'status-warn';
-    } else {
-      el.textContent = 'Pay rates look good now.';
-      el.className = 'status-ok';
-      el.dataset.rateError = '';
+  // Re-derives against the actual shifts each status was blocking on
+  // (same as validateMatchedRates() elsewhere) rather than every row in
+  // Settings — otherwise this could keep an error alive over an unrelated
+  // incomplete row that was never actually in play here.
+  const parseEl = document.getElementById('parseStatus');
+  if (parseEl && parseEl.dataset.rateError === '1') {
+    const html = document.getElementById('htmlInput').value.trim();
+    let rateProblems = [];
+    if (html) {
+      try { rateProblems = validateMatchedRates(buildShifts(parseSchedule(html)).shifts); }
+      catch (e) { rateProblems = []; } // malformed paste — nothing to check yet, not a rate problem
     }
-  });
+    if (rateProblems.length) {
+      parseEl.innerHTML = '<strong>Fix your pay rates before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+      parseEl.className = 'status-warn';
+    } else {
+      parseEl.textContent = 'Pay rates look good now.';
+      parseEl.className = 'status-ok';
+      parseEl.dataset.rateError = '';
+    }
+  }
+
+  const updateEl = document.getElementById('updateTimesheetStatus');
+  if (updateEl && updateEl.dataset.rateError === '1' && lastResult) {
+    const rateProblems = validateMatchedRates(lastResult.shifts.map(s => ({ rule: classifyRate(s.type) })));
+    if (rateProblems.length) {
+      updateEl.innerHTML = '<strong>Fix your pay rates before updating:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+      updateEl.className = 'status-warn';
+    } else {
+      updateEl.textContent = 'Pay rates look good now.';
+      updateEl.className = 'status-ok';
+      updateEl.dataset.rateError = '';
+    }
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -409,11 +718,23 @@ function markRatesDirty() {
   const banner = document.getElementById('ratesDirtyBanner');
   if (banner) banner.classList.toggle('banner-visible', lastResult && lastResult.shifts.length > 0);
   refreshRateStatusOnEdit();
+  // Keeps the bookmarklet's embedded rules snapshot current — every rate
+  // mutation already funnels through here, so this is the one place that
+  // needs to know about it rather than every individual onchange handler.
+  refreshBookmarkletButton();
+  refreshBookmarkletStaleHint();
 }
 function reapplyRatesToSheet() {
   const updateTimesheetStatus = document.getElementById('updateTimesheetStatus');
   updateTimesheetStatus.dataset.rateError = '';
-  const rateProblems = validateRates();
+  if (!lastResult) return;
+
+  // Reclassify against a scratch copy first — only commit it to the real
+  // shifts once we know the result won't get blocked, so a rejected
+  // update doesn't leave shifts pointing at rules that were never
+  // actually approved for this sheet.
+  const reclassified = lastResult.shifts.map(s => ({ shift: s, rule: classifyRate(s.type) }));
+  const rateProblems = validateMatchedRates(reclassified);
   if (rateProblems.length) {
     updateTimesheetStatus.innerHTML = '<strong>Fix your pay rates before updating:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
     updateTimesheetStatus.className = 'status-warn';
@@ -421,10 +742,7 @@ function reapplyRatesToSheet() {
     return;
   }
 
-  if (!lastResult) return;
-  lastResult.shifts.forEach(s => {
-    s.rule = classifyRate(s.type);
-  });
+  reclassified.forEach(x => { x.shift.rule = x.rule; });
   renderResults();
   updateTimesheetStatus.textContent = 'Timesheet updated.';
   updateTimesheetStatus.className = 'status-ok';
@@ -433,6 +751,23 @@ function reapplyRatesToSheet() {
 }
 
 function escapeHtml(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Defensive hardening, not a confirmed root cause: a lone/unpaired UTF-16
+// surrogate in rate match text (most plausible source: a scraped Club
+// Automation title via createStubsForUnmatched() or the bookmarklet's
+// on-page Q&A) was suspected of making encodeURIComponent() throw "URI
+// malformed" inside refreshBookmarkletButton() — but JSON.stringify()
+// already escapes a lone surrogate into safe literal text (well-formed
+// JSON.stringify, spec since ES2019) before it ever reaches
+// encodeURIComponent, so this specific mechanism doesn't actually trigger
+// — verified live, not just reasoned about. Left in anyway since it's
+// harmless and a reasonable thing to guard regardless; the real cause of
+// "button silently never gets a working href" is still open — see the
+// visible bookmarkletGenErrorHint banner below for whatever it turns out
+// to be.
+function stripLoneSurrogates(s) {
+  return (s || '').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g, m => m.length > 1 ? m[0] : '');
+}
 
 // Splits pasted contract/compensation text into clean lines, stripping
 // whatever bullet character it came in with (Word/PDF paste-ins commonly
@@ -463,16 +798,101 @@ renderRates();
 // string is already just letters/digits/%XX, so that re-serialization is a
 // no-op; per the HTML spec a javascript: URL is percent-decoded right
 // before it runs, so the code still executes exactly as written.
-try {
-  const bookmarkletSource = `(async function () { if (window.location.hostname.indexOf('clubautomation.com') === -1) { alert('This button only works on your Club Automation schedule page. Go there first, open your weekly schedule, then click this again.'); return; } var el = document.getElementById('court_schedule'); if (!el) { alert('Could not find your schedule on this page. Make sure you have your weekly schedule open (not the login page or another screen), and that it has finished loading, then try again.'); return; } var overlay = document.createElement('div'); overlay.style.cssText = 'all:initial;position:fixed !important;top:16px !important;right:16px !important;z-index:2147483647 !important;background:#1c2321 !important;color:#fff !important;opacity:1 !important;filter:none !important;padding:16px 20px !important;border-radius:6px !important;font-family:sans-serif !important;font-size:14px !important;line-height:1.5 !important;box-shadow:0 4px 16px rgba(0,0,0,0.3) !important;max-width:320px !important;display:block !important;'; overlay.textContent = 'Getting your schedule... please stay on this page.'; overlay.setAttribute('role', 'status'); overlay.setAttribute('aria-live', 'polite'); document.documentElement.appendChild(overlay); function titleOf(block) { var h4 = block.querySelector('h4'); if (!h4) return ''; var clone = h4.cloneNode(true); var icons = clone.querySelectorAll('.icons'); for (var k = 0; k < icons.length; k++) { icons[k].remove(); } return clone.textContent.trim(); } function subtitleOf(block) { var h4 = block.querySelector('h4'); if (!h4) return ''; var sib = h4.nextElementSibling; return sib ? sib.textContent.replace(/\\s+/g, ' ').trim() : ''; } function copyFallback(text) { var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; } document.body.removeChild(ta); return ok; } var clone = el.cloneNode(true); var liveBlocks = el.querySelectorAll('.eventBlock'); var cloneBlocks = clone.querySelectorAll('.eventBlock'); var ok = 0, fail = 0, skipped = 0, blockedCount = 0, emptyCount = 0, realCount = 0; for (var i = 0; i < liveBlocks.length; i++) { var t = titleOf(liveBlocks[i]); var isBlocked = t.toLowerCase().indexOf('blocked') !== -1; var isEmptySlot = t.indexOf('PL') === 0 && !subtitleOf(liveBlocks[i]); if (isBlocked) { blockedCount++; continue; } if (isEmptySlot) { emptyCount++; continue; } realCount++; overlay.textContent = 'Getting your schedule... ' + (i + 1) + ' of ' + liveBlocks.length + '. Please stay on this page.'; var cls = liveBlocks[i].className; var schedMatch = cls.match(/schedule-(\\d+)/); var resMatch = cls.match(/resource-(\\d{4})-\\d{2}-\\d{2}/); if (!schedMatch) { skipped++; continue; } var scheduleId = schedMatch[1]; var year = resMatch ? resMatch[1] : String(new Date().getFullYear()); try { var resp = await fetch('/event/event-full-info', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' }, body: new URLSearchParams({ schedule_id: scheduleId, resource_id: year, current_component: '0', is_groupex: '0', is_human_resource_component_view: '0', is_staff_schedule_view: '1', locationId: '0' }), credentials: 'same-origin' }); var data = await resp.json(); if (data && data.status === 1 && data.content) { cloneBlocks[i].setAttribute('data-detail', encodeURIComponent(data.content)); ok++; } else { fail++; } } catch (e) { fail++; } await new Promise(function (r) { setTimeout(r, 150); }); } var htmlOut = clone.outerHTML; var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').']; if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).'); if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.'); var msg = summaryLines.join('\\n'); function onCopyDone(success) { overlay.remove(); if (success) { alert(msg + '\\nCopied — now paste it into the timesheet app.'); } else { window.prompt(msg + '\\nCopy this manually (Ctrl+C / Cmd+C):', htmlOut); } } overlay.innerHTML = ''; summaryLines.forEach(function (line, idx) { var lineDiv = document.createElement('div'); lineDiv.textContent = line; lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:' + (idx > 0 ? '0.85' : '1') + ' !important;font-size:' + (idx > 0 ? '13px' : '14px') + ' !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:' + (idx > 0 ? '6px' : '0') + ' !important;'; overlay.appendChild(lineDiv); }); var hint = document.createElement('div'); hint.textContent = 'Click below to copy it.'; hint.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;margin-bottom:10px !important;'; overlay.appendChild(hint); var copyBtn = document.createElement('button'); copyBtn.textContent = 'Copy schedule'; copyBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:#fff !important;color:#1c2321 !important;opacity:1 !important;border:none !important;padding:8px 14px !important;border-radius:4px !important;cursor:pointer !important;font-weight:600 !important;font-size:14px !important;font-family:sans-serif !important;'; copyBtn.onclick = function () { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(htmlOut).then(function () { onCopyDone(true); }, function () { onCopyDone(copyFallback(htmlOut)); }); } else { onCopyDone(copyFallback(htmlOut)); } }; overlay.appendChild(copyBtn); copyBtn.focus(); })();`;
-  const bookmarkletCode = 'javascript:' + encodeURIComponent(bookmarkletSource);
-  const bookmarkletBtn = document.getElementById('bookmarkletBtn');
-  if (bookmarkletBtn) bookmarkletBtn.setAttribute('href', bookmarkletCode);
-  const bookmarkletCodeBox = document.getElementById('bookmarkletCode');
-  if (bookmarkletCodeBox) bookmarkletCodeBox.value = bookmarkletCode;
-} catch (e) {
-  console.error('Could not set up the bookmarklet button:', e);
+//
+// __APP_URL__ is a placeholder for wherever THIS page was actually loaded
+// from, substituted in below — so a coach who drags the button from a
+// self-hosted deployment gets a bookmarklet pointed at that deployment,
+// not a hardcoded URL. Substitution uses split/join rather than
+// .replace(), since .replace() treats a $-prefixed sequence specially in
+// its *replacement* argument even when the search argument is a plain
+// string — split/join has no such special-casing.
+//
+// __RULES_SNAPSHOT__ is a placeholder for a {match, matchMode} snapshot of
+// the CURRENT rate rules (dollar amounts deliberately left out — this
+// only needs to answer "does a title already have a rule," not what it
+// pays). Refreshed on every rates mutation via markRatesDirty(), not just
+// page load, so a coach who edits Settings and re-drags the button gets
+// an up-to-date snapshot. A stale snapshot (edited without re-dragging)
+// degrades safely: the app re-checks every title for real at parse time
+// regardless, so staleness here only ever causes a redundant on-page
+// question or a missed one — never bad data.
+// Shared by refreshBookmarkletButton() (embeds this in the generated
+// button) and the stale-hint check below (compares against a stamped
+// copy) — one definition so the two can't drift apart.
+function bookmarkletRulesSnapshot() {
+  // stripLoneSurrogates() here too, defensively — covers match text
+  // that predates mergeNewRateRules() sanitizing on the way in (typed by
+  // hand, or saved before that fix existed), so a bad character already
+  // sitting in localStorage can't keep the button broken indefinitely.
+  // complete lets the bookmarklet's on-page prompt tell a real rule apart
+  // from a $0 auto-created stub — a stub matching a title must not
+  // suppress the prompt that would let a coach actually fill it in.
+  return state.rates.map(r => ({ match: stripLoneSurrogates(r.match), matchMode: r.matchMode || 'contains', complete: !rateRuleMissingFields(r).length }));
 }
+function refreshBookmarkletButton() {
+  try {
+    const bookmarkletSource = `(async function () { var APP_URL = '__APP_URL__'; var APP_ORIGIN = new URL(APP_URL).origin; var AGAPE_RULES_SNAPSHOT = __RULES_SNAPSHOT__; if (window.location.hostname.indexOf('clubautomation.com') === -1) { alert('This button only works on your Club Automation schedule page. Go there first, open your weekly schedule, then click this again.'); return; } var el = document.getElementById('court_schedule'); if (!el) { alert('Could not find your schedule on this page. Make sure you have your weekly schedule open (not the login page or another screen), and that it has finished loading, then try again.'); return; } var appWin = null; try { appWin = window.open('', 'agapeTimesheetApp'); } catch (e) { appWin = null; } if (appWin) { var isFreshTab; try { isFreshTab = (appWin.location.href === 'about:blank' || appWin.location.href === ''); } catch (e) { isFreshTab = false; } if (isFreshTab) { try { appWin.location.href = APP_URL; } catch (e) { appWin = null; } } } try { window.focus(); } catch (e) {} var focusReclaimTimer = appWin ? setInterval(function () { try { window.focus(); } catch (e) {} }, 400) : null; var appReady = false; var pingTimer = null; var onScheduleReceived = null; if (appWin) { pingTimer = setInterval(function () { if (appReady) { clearInterval(pingTimer); return; } try { appWin.postMessage({ type: 'AGAPE_PING' }, APP_ORIGIN); } catch (e) {} }, 300); window.addEventListener('message', function (e) { if (e.source !== appWin || !e.data) return; if (e.data.type === 'AGAPE_READY') appReady = true; else if (e.data.type === 'AGAPE_RECEIVED' && onScheduleReceived) onScheduleReceived(); }); } var overlay = document.createElement('div'); overlay.style.cssText = 'all:initial;position:fixed !important;top:16px !important;right:16px !important;z-index:2147483647 !important;background:#1c2321 !important;color:#fff !important;opacity:1 !important;filter:none !important;padding:16px 20px !important;border-radius:6px !important;font-family:sans-serif !important;font-size:14px !important;line-height:1.5 !important;box-shadow:0 4px 16px rgba(0,0,0,0.3) !important;max-width:320px !important;display:block !important;'; overlay.textContent = 'Getting your schedule... please stay on this page.'; overlay.setAttribute('role', 'status'); overlay.setAttribute('aria-live', 'polite'); document.documentElement.appendChild(overlay); function titleOf(block) { var h4 = block.querySelector('h4'); if (!h4) return ''; var clone = h4.cloneNode(true); var icons = clone.querySelectorAll('.icons'); for (var k = 0; k < icons.length; k++) { icons[k].remove(); } return clone.textContent.trim(); } function subtitleOf(block) { var h4 = block.querySelector('h4'); if (!h4) return ''; var sib = h4.nextElementSibling; return sib ? sib.textContent.replace(/\\s+/g, ' ').trim() : ''; } function enrichedTitleOf(rawTitle, subtitle) { if (rawTitle === 'Group class') return rawTitle + ': ' + subtitle; if (rawTitle.indexOf('PL') === 0) return 'PL: ' + subtitle; return (rawTitle + ' ' + subtitle).trim(); } function localClassifyMatches(title, snapshot) { for (var j = 0; j < snapshot.length; j++) { var r = snapshot[j]; if (!r.match) continue; var mode = r.matchMode || 'contains'; var matches = mode === 'startsWith' ? title.toUpperCase().indexOf(r.match.trim().toUpperCase()) === 0 : title.toLowerCase().indexOf(r.match.trim().toLowerCase()) !== -1; if (matches && r.complete !== false) return true; } return false; } function copyFallback(text) { var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; } document.body.removeChild(ta); return ok; } var clone = el.cloneNode(true); var liveBlocks = el.querySelectorAll('.eventBlock'); var cloneBlocks = clone.querySelectorAll('.eventBlock'); var ok = 0, fail = 0, skipped = 0, blockedCount = 0, emptyCount = 0, realCount = 0; var distinctTitles = [], seenTitles = {}; for (var i = 0; i < liveBlocks.length; i++) { var t = titleOf(liveBlocks[i]); var sub = subtitleOf(liveBlocks[i]); var isBlocked = t.toLowerCase().indexOf('blocked') !== -1; var isEmptySlot = t.indexOf('PL') === 0 && !sub; if (isBlocked) { blockedCount++; continue; } if (isEmptySlot) { emptyCount++; continue; } realCount++; var enrichedT = enrichedTitleOf(t, sub); if (!seenTitles[enrichedT]) { seenTitles[enrichedT] = true; distinctTitles.push(enrichedT); } overlay.textContent = 'Getting your schedule... ' + (i + 1) + ' of ' + liveBlocks.length + '. Please stay on this page.'; var cls = liveBlocks[i].className; var schedMatch = cls.match(/schedule-(\\d+)/); var resMatch = cls.match(/resource-(\\d{4})-\\d{2}-\\d{2}/); if (!schedMatch) { skipped++; continue; } var scheduleId = schedMatch[1]; var year = resMatch ? resMatch[1] : String(new Date().getFullYear()); try { var resp = await fetch('/event/event-full-info', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' }, body: new URLSearchParams({ schedule_id: scheduleId, resource_id: year, current_component: '0', is_groupex: '0', is_human_resource_component_view: '0', is_staff_schedule_view: '1', locationId: '0' }), credentials: 'same-origin' }); var data = await resp.json(); if (data && data.status === 1 && data.content) { cloneBlocks[i].setAttribute('data-detail', encodeURIComponent(data.content)); ok++; } else { fail++; } } catch (e) { fail++; } await new Promise(function (r) { setTimeout(r, 150); }); } var titlesToPrompt = distinctTitles.filter(function (t) { return !localClassifyMatches(t, AGAPE_RULES_SNAPSHOT); }); function promptForNumber(question, max) { while (true) { var raw = window.prompt(question); if (raw === null) return null; var n = parseFloat(raw.trim()); var outOfRange = raw.trim() === '' || isNaN(n) || n < 0 || (max !== undefined && n > max); if (outOfRange) { alert("That doesn't look like a valid " + (max !== undefined ? ('percentage (0-' + max + ')') : 'dollar amount') + " — try again, or Cancel on the next prompt to skip this one."); continue; } return n; } } var newRateRules = []; for (var ti = 0; ti < titlesToPrompt.length; ti++) { var title = titlesToPrompt[ti]; var setUp = confirm('"' + title + '" doesn\\'t have a pay rate set up yet.\\n\\n' + "Set one up now? (Cancel to skip — it'll show as $0.00 with a warning on your sheet until you add one, same as today.)"); if (!setUp) continue; var isFlat = confirm('Is "' + title + '" a flat hourly rate?\\n\\n' + 'OK = flat $/hr.\\nCancel = priced per person per session instead (e.g. $20/person, Agape keeps a %).'); if (isFlat) { var rate = promptForNumber('What do you get paid per hour for "' + title + '"?'); if (rate === null) continue; newRateRules.push({ match: title, matchMode: 'startsWith', type: 'hourly', mode: 'flat', rate: rate, defaultPeople: 1 }); } else { var pricePerPerson = promptForNumber('What does each person pay for a session of "' + title + '"?'); if (pricePerPerson === null) continue; var agapeCutPct = promptForNumber('What percentage does Agape keep for "' + title + '"?', 100); if (agapeCutPct === null) continue; newRateRules.push({ match: title, matchMode: 'startsWith', type: 'per_person', pricePerPerson: pricePerPerson, coachShare: 100 - agapeCutPct }); } } if (newRateRules.length) { clone.setAttribute('data-agape-new-rate-rules', encodeURIComponent(JSON.stringify(newRateRules))); } var htmlOut = clone.outerHTML; overlay.textContent = 'Sending to your timesheet app...'; var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').']; if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).'); if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.'); if (newRateRules.length) summaryLines.push('Set up ' + newRateRules.length + ' new pay rate' + (newRateRules.length === 1 ? '' : 's') + '.'); var skippedCount = titlesToPrompt.length - newRateRules.length; if (skippedCount > 0) summaryLines.push(skippedCount + ' booking type' + (skippedCount === 1 ? '' : 's') + ' still without a rate — will show $0.00 until fixed.'); var msg = summaryLines.join('\\n'); function waitForAck() { return new Promise(function (resolve) { var settled = false; var to = setTimeout(function () { if (!settled) { settled = true; onScheduleReceived = null; resolve(false); } }, 8000); onScheduleReceived = function () { if (settled) return; settled = true; clearTimeout(to); onScheduleReceived = null; resolve(true); }; (function trySend() { if (settled) return; if (appReady) { try { appWin.postMessage({ type: 'AGAPE_SCHEDULE_DATA', html: htmlOut, newRateRules: newRateRules }, APP_ORIGIN); } catch (e) {} } else { setTimeout(trySend, 300); } })(); }); } var delivered = appWin ? await waitForAck() : false; if (focusReclaimTimer !== null) clearInterval(focusReclaimTimer); if (delivered) { try { appWin.focus(); } catch (e) {} overlay.innerHTML = ''; summaryLines.forEach(function (line, idx) { var lineDiv = document.createElement('div'); lineDiv.textContent = line; lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:' + (idx > 0 ? '0.85' : '1') + ' !important;font-size:' + (idx > 0 ? '13px' : '14px') + ' !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:' + (idx > 0 ? '6px' : '0') + ' !important;'; overlay.appendChild(lineDiv); }); var doneLine = document.createElement('div'); doneLine.textContent = 'Sent to the timesheet app — check that tab.'; doneLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;font-weight:600 !important;'; overlay.appendChild(doneLine); setTimeout(function () { overlay.remove(); }, 3000); return; } function onCopyDone(success) { overlay.remove(); if (success) { alert(msg + '\\nCopied — now paste it into the timesheet app.'); } else { window.prompt(msg + '\\nCopy this manually (Ctrl+C / Cmd+C):', htmlOut); } } overlay.innerHTML = ''; var whyLine = document.createElement('div'); whyLine.textContent = "Couldn't reach the timesheet app tab automatically."; whyLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;'; overlay.appendChild(whyLine); summaryLines.forEach(function (line) { var lineDiv = document.createElement('div'); lineDiv.textContent = line; lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:0.85 !important;font-size:13px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:6px !important;'; overlay.appendChild(lineDiv); }); var hint = document.createElement('div'); hint.textContent = 'Click below to copy it, then paste into the app tab.'; hint.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;margin-bottom:10px !important;'; overlay.appendChild(hint); var copyBtn = document.createElement('button'); copyBtn.textContent = 'Copy schedule'; copyBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:#fff !important;color:#1c2321 !important;opacity:1 !important;border:none !important;padding:8px 14px !important;border-radius:4px !important;cursor:pointer !important;font-weight:600 !important;font-size:14px !important;font-family:sans-serif !important;'; copyBtn.onclick = function () { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(htmlOut).then(function () { onCopyDone(true); }, function () { onCopyDone(copyFallback(htmlOut)); }); } else { onCopyDone(copyFallback(htmlOut)); } }; overlay.appendChild(copyBtn); copyBtn.focus(); })();`;
+    const appUrl = window.location.origin + window.location.pathname;
+    const rulesSnapshot = JSON.stringify(bookmarkletRulesSnapshot());
+    const source = bookmarkletSource.split('__APP_URL__').join(appUrl).split('__RULES_SNAPSHOT__').join(rulesSnapshot);
+    const bookmarkletCode = 'javascript:' + encodeURIComponent(source);
+    const bookmarkletBtn = document.getElementById('bookmarkletBtn');
+    if (bookmarkletBtn) bookmarkletBtn.setAttribute('href', bookmarkletCode);
+    const bookmarkletCodeBox = document.getElementById('bookmarkletCode');
+    if (bookmarkletCodeBox) bookmarkletCodeBox.value = bookmarkletCode;
+    const genErrorHint = document.getElementById('bookmarkletGenErrorHint');
+    if (genErrorHint) genErrorHint.classList.add('hidden');
+  } catch (e) {
+    // Was previously only a console.error — completely invisible unless
+    // someone happened to have devtools open on this page at this exact
+    // moment, leaving the button silently stuck on its harmless
+    // javascript:void(0) placeholder href with no sign anything was
+    // wrong. Now it's a real, visible failure state instead.
+    console.error('Could not set up the bookmarklet button:', e);
+    const genErrorHint = document.getElementById('bookmarkletGenErrorHint');
+    if (genErrorHint) genErrorHint.classList.remove('hidden');
+  }
+}
+refreshBookmarkletButton();
+
+// Heuristic, not certainty — there's no way to observe an actual successful
+// drop onto the bookmarks bar, only that the coach grabbed the current code
+// (a real dragstart, or a click on the Copy button below). Stamping on
+// either is the best available signal that they took the current snapshot
+// with them.
+//
+// Two localStorage keys: ts_bookmarkletSnapshotAtLastGrab (what they took
+// last), ts_bookmarkletHintDismissedFor (what staleness state they last
+// dismissed the hint for — so dismissing doesn't silence it forever, only
+// until the rates change again beyond that point).
+function refreshBookmarkletStaleHint() {
+  const hint = document.getElementById('bookmarkletStaleHint');
+  const textEl = document.getElementById('bookmarkletStaleHintText');
+  if (!hint || !textEl) return;
+  const live = JSON.stringify(bookmarkletRulesSnapshot());
+  const lastGrabbed = localStorage.getItem('ts_bookmarkletSnapshotAtLastGrab');
+  const dismissedFor = localStorage.getItem('ts_bookmarkletHintDismissedFor');
+  let message = null;
+  if (lastGrabbed === null) {
+    message = 'Drag the button above to your bookmarks bar to enable pay-rate prompts on Club Automation.';
+  } else if (lastGrabbed !== live) {
+    message = 'You changed a rate since you last installed the button — redrag it (or copy the code again) to pick up the update.';
+  }
+  if (message && dismissedFor === live) message = null;
+  textEl.textContent = message || '';
+  hint.classList.toggle('banner-visible', !!message);
+}
+function stampBookmarkletGrabbed() {
+  localStorage.setItem('ts_bookmarkletSnapshotAtLastGrab', JSON.stringify(bookmarkletRulesSnapshot()));
+  refreshBookmarkletStaleHint();
+}
+function dismissBookmarkletStaleHint() {
+  localStorage.setItem('ts_bookmarkletHintDismissedFor', JSON.stringify(bookmarkletRulesSnapshot()));
+  refreshBookmarkletStaleHint();
+}
+const bookmarkletBtnEl = document.getElementById('bookmarkletBtn');
+if (bookmarkletBtnEl) bookmarkletBtnEl.addEventListener('dragstart', stampBookmarkletGrabbed);
+refreshBookmarkletStaleHint();
 
 function copyBookmarkletCode() {
   const ta = document.getElementById('bookmarkletCode');
@@ -485,6 +905,7 @@ function copyBookmarkletCode() {
   } else {
     try { document.execCommand('copy'); done(); } catch (e) { status.textContent = 'Select the text above and copy it manually.'; }
   }
+  stampBookmarkletGrabbed();
 }
 
 // ---------------------------------------------------------------------
@@ -669,6 +1090,7 @@ function buildShifts(events) {
       id: shiftIdCounter++,
       date: e.date,
       type: e.title,
+      rawTitle: e.rawTitle,  // pre-display-formatting title (no client name embedded) — used to seed an auto-created rate rule's match text
       client: e.client,
       startTime: e.startTime,
       endTime: e.endTime,
@@ -846,7 +1268,8 @@ function shiftNeedsAttention(shift, conflictIds) {
 // ---------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------
-let lastResult = null; // { shifts, name }
+// (lastResult itself is declared up near `state`, not here — see the
+// comment there for why.)
 
 // Whether a shift's detail panel is expanded defaults to whether it needs
 // attention (missing location/rate) — but once the coach explicitly
@@ -918,6 +1341,85 @@ function shiftFingerprint(s) {
 let pendingShifts = null;
 let pendingSummary = null;
 
+// Reads the new-rate-rules the bookmarklet embedded on the scraped
+// schedule's root element (data-agape-new-rate-rules) — the single source
+// of truth for that data regardless of whether it arrived via the
+// postMessage hand-off or the manual copy/paste fallback, since both
+// carry the same html string through this same function.
+function extractEmbeddedNewRateRules(html) {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const root = doc.body.firstElementChild;
+    const raw = root && root.getAttribute('data-agape-new-rate-rules');
+    if (!raw) return [];
+    const parsed = JSON.parse(decodeURIComponent(raw));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Prepends newly-answered rules ahead of existing ones — first match
+// wins, and a specific one-off title should out-rank a broad pre-seeded
+// category, matching this app's own "put specific rows above general
+// ones" convention. Dedupes on {match, matchMode} (case-insensitive) so
+// re-applying the same schedule html twice (e.g. a stray retry) doesn't
+// pile up duplicate rows. Returns how many were actually added.
+function mergeNewRateRules(newRules) {
+  if (!newRules.length) return 0;
+  // Scraped straight off Club Automation's HTML (via the bookmarklet's
+  // Q&A or createStubsForUnmatched()) — defensively sanitized before it
+  // ever reaches state.rates (see stripLoneSurrogates() for why this
+  // turned out not to be the thing actually breaking the button, but is
+  // worth guarding anyway).
+  newRules = newRules.map(r => Object.assign({}, r, { match: stripLoneSurrogates(r.match) }));
+  const key = r => (r.match || '').trim().toLowerCase() + '|' + (r.matchMode || 'contains');
+  const existing = new Set(state.rates.map(key));
+  const toAdd = newRules.filter(r => !existing.has(key(r)));
+  if (!toAdd.length) return 0;
+  state.rates = toAdd.concat(state.rates);
+  saveSettings();
+  renderRates();
+  markRatesDirty();
+  return toAdd.length;
+}
+
+// For any shift whose title matched nothing configured, auto-creates an
+// editable "Other rates" row pre-filled with the raw booking title — so a
+// coach fixing this doesn't have to notice the "no matching rate rule"
+// warning, then retype the exact title text themselves. Doesn't touch the
+// rule already snapshotted on these shifts (they keep showing the
+// existing "No rate matched" warning until the coach fills the new row in
+// and clicks "Update timesheet", same reclassify-on-demand flow as any
+// other rate edit) — reclassifying immediately would swap that
+// hard-to-miss warning for a quiet "$0/hr", which is worse, not better.
+// Reuses mergeNewRateRules() for the actual insert, so it dedupes and
+// stays ahead of the core rows the same way everywhere else does.
+function createStubsForUnmatched(shifts) {
+  const seenTitle = new Set();
+  const stubs = [];
+  shifts.forEach(s => {
+    if (s.rule.match) return;
+    // s.type (the display title) is what classifyRate() actually matches
+    // against, and — for anything but a PL booking — is the *specific*
+    // class name Club Automation shows, e.g. "Group class: PBALL Drill &
+    // Play AM Sessions (Level 1 & 2) - FV", not just the generic "Group
+    // class" label rawTitle holds. That specificity is exactly the point:
+    // two different classes that both happen to be labeled "Group class"
+    // should get their own separate rules, not collapse into one. Falls
+    // back to rawTitle only for a PL-prefixed title, since that display
+    // title embeds a coincidental client name rather than a reusable
+    // category — though PL is core-matched already, so this branch
+    // shouldn't actually be reachable in practice.
+    const raw = ((s.rawTitle || '').toUpperCase().startsWith('PL') ? s.rawTitle : (s.type || s.rawTitle || '')).trim();
+    const key = raw.toLowerCase();
+    if (!raw || seenTitle.has(key)) return;
+    seenTitle.add(key);
+    stubs.push({ match: raw, matchMode: 'startsWith', type: 'hourly', mode: 'flat', defaultPeople: 1 });
+  });
+  return mergeNewRateRules(stubs);
+}
+
 function runParse() {
   if (sheetStartedAt === null) sheetStartedAt = Date.now();
   saveSettings();
@@ -929,18 +1431,12 @@ function runParse() {
   pendingShifts = null;
   pendingSummary = null;
 
-  // A rule with a blank pay field would silently compute $0 for anything
-  // that matches it — block parsing entirely instead, so a half-filled-in
-  // rate can't quietly ship on a real commission sheet.
-  const rateProblems = validateRates();
-  if (rateProblems.length) {
-    status.innerHTML = '<strong>Fix your pay rates before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
-    status.className = 'status-warn';
-    status.dataset.rateError = '1';
-    return;
-  }
-
   if (!html) { status.textContent = 'Paste some schedule HTML first.'; status.className = ''; return; }
+
+  // Merge before parsing so a freshly-answered rule (from the
+  // bookmarklet's on-page prompts) is already in effect for this exact
+  // parse, not just the next one.
+  const addedRuleCount = mergeNewRateRules(extractEmbeddedNewRateRules(html));
 
   let events;
   try {
@@ -958,6 +1454,19 @@ function runParse() {
 
   const { shifts: newShifts, excluded } = buildShifts(events);
 
+  // A rule with a blank pay field would silently compute $0 for anything
+  // that matches it — block on that instead, so a half-filled-in rate
+  // can't quietly ship on a real commission sheet. Only rules that
+  // actually matched something here have to be complete — see
+  // validateMatchedRates() for why.
+  const rateProblems = validateMatchedRates(newShifts);
+  if (rateProblems.length) {
+    status.innerHTML = '<strong>Fix your pay rates before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+    status.className = 'status-warn';
+    status.dataset.rateError = '1';
+    return;
+  }
+
   const existingFingerprints = new Set((lastResult ? lastResult.shifts : []).map(shiftFingerprint));
   let toAdd = [], dupes = 0;
   newShifts.forEach(s => {
@@ -971,6 +1480,7 @@ function runParse() {
   pendingSummary = { totalFound: events.length, blocked: excluded.blocked.length, emptySlots: excluded.emptySlots.length, dupes, toAdd: toAdd.length };
 
   const parts = [];
+  if (addedRuleCount) parts.push(`Added ${addedRuleCount} new pay rate rule${addedRuleCount === 1 ? '' : 's'} from Club Automation — check ${addedRuleCount === 1 ? 'it' : 'them'} in Settings.`);
   parts.push(`Found ${pendingSummary.totalFound} calendar entries.`);
   parts.push(`${pendingSummary.toAdd} will be added.`);
   if (pendingSummary.blocked) parts.push(`${pendingSummary.blocked} blocked time (excluded, unpaid).`);
@@ -997,6 +1507,7 @@ function confirmAdd() {
     lastResult = { shifts: [], name: document.getElementById('coachName').value || 'Coach' };
   }
   lastResult.shifts.push(...pendingShifts);
+  createStubsForUnmatched(pendingShifts);
 
   const status = document.getElementById('parseStatus');
   status.textContent = `Added. Sheet now has ${lastResult.shifts.length} total entries.`;
@@ -1007,6 +1518,104 @@ function confirmAdd() {
   pendingShifts = null;
   pendingSummary = null;
   renderResults();
+}
+
+// Bookmarklet hand-off path: composes parse -> validate -> build -> commit
+// directly into lastResult, atomically, skipping the pending/confirm
+// review gate that runParse()/confirmAdd() use for the manual paste flow.
+// That gate exists because pasting is the atypical/troubleshooting path —
+// something already went sideways once. A bookmarklet hand-off is the
+// opposite case: the coach already watched Club Automation's own summary
+// before it sent anything, so an extra "does this look right?" click here
+// would just be friction with no real safety benefit. Errors here can't
+// rely on status text being noticed (that text isn't the primary visible
+// surface for this path) so they get a banner on the results area itself.
+function autoParseAndAdd(html) {
+  if (sheetStartedAt === null) sheetStartedAt = Date.now();
+  saveSettings();
+
+  const addedRuleCount = mergeNewRateRules(extractEmbeddedNewRateRules(html));
+
+  let events;
+  try {
+    events = parseSchedule(html);
+  } catch (err) {
+    showHandoffError('Could not parse the schedule Club Automation sent over — check the "Get My Schedule" button is up to date, or paste it manually below.', html);
+    return;
+  }
+  if (events.length === 0) {
+    showHandoffError('No events found in the schedule Club Automation sent over. Make sure the week you wanted had actually loaded before clicking the button.', html);
+    return;
+  }
+
+  const { shifts: newShifts, excluded } = buildShifts(events);
+
+  // Only rules that actually matched a shift in this parse have to be
+  // complete — see validateMatchedRates() for why (a core row for a
+  // category this week's schedule never touches shouldn't block).
+  const rateProblems = validateMatchedRates(newShifts);
+  if (rateProblems.length) {
+    showHandoffError('<strong>Fix your pay rates before this can be added:</strong><br>' +
+      rateProblems.map(escapeHtml).join('<br>') +
+      '<br>Your schedule is saved below — fix your rates in Settings, then click Parse.', html);
+    return;
+  }
+
+  const existingFingerprints = new Set((lastResult ? lastResult.shifts : []).map(shiftFingerprint));
+  let toAdd = [], dupes = 0;
+  newShifts.forEach(s => {
+    const fp = shiftFingerprint(s);
+    if (existingFingerprints.has(fp)) { dupes++; return; }
+    existingFingerprints.add(fp);
+    toAdd.push(s);
+  });
+
+  if (!lastResult) {
+    lastResult = { shifts: [], name: document.getElementById('coachName').value || 'Coach' };
+  }
+  lastResult.shifts.push(...toAdd);
+  createStubsForUnmatched(toAdd);
+
+  const parts = [`${toAdd.length} entr${toAdd.length === 1 ? 'y' : 'ies'} added from Club Automation.`];
+  if (addedRuleCount) parts.push(`Added ${addedRuleCount} new pay rate rule${addedRuleCount === 1 ? '' : 's'} — check ${addedRuleCount === 1 ? 'it' : 'them'} in Settings.`);
+  if (excluded.blocked.length) parts.push(`${excluded.blocked.length} blocked time (excluded, unpaid).`);
+  if (excluded.emptySlots.length) parts.push(`${excluded.emptySlots.length} empty/unbooked slot${excluded.emptySlots.length === 1 ? '' : 's'} (excluded).`);
+  if (dupes) parts.push(`${dupes} already in the sheet (skipped).`);
+
+  const status = document.getElementById('parseStatus');
+  status.textContent = parts.join(' ');
+  status.className = 'status-ok';
+  status.dataset.rateError = '';
+  document.getElementById('htmlInput').value = '';
+  pendingShifts = null;
+  pendingSummary = null;
+
+  renderResults();
+  try { document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* cosmetic only, ignore */ }
+}
+
+// Prominent, hard-to-miss failure surface for the hand-off path — unlike
+// the manual paste flow, a coach landing here from the bookmarklet isn't
+// necessarily looking at the (now-collapsed) paste section's status text.
+// Keeps the raw html in the textarea and expands that section so retrying
+// via Parse/Add to sheet is one click away, not a hunt.
+function showHandoffError(messageHtml, rawHtml) {
+  document.getElementById('htmlInput').value = rawHtml;
+  const loadingBanner = document.getElementById('handoffLoadingBanner');
+  if (loadingBanner) loadingBanner.classList.add('hidden');
+  const banner = document.getElementById('handoffErrorBanner');
+  if (banner) {
+    banner.innerHTML = '&#9888; ' + messageHtml;
+    banner.classList.remove('hidden');
+  }
+  document.getElementById('resultsSection').classList.remove('hidden');
+  expandPasteSection();
+  try { banner.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* cosmetic only, ignore */ }
+}
+
+function expandPasteSection() {
+  const details = document.getElementById('pasteDetails');
+  if (details) details.open = true;
 }
 
 function clearAll() {
@@ -1034,6 +1643,10 @@ function clearAll() {
     if (results) results.innerHTML = '';
     const dirtyBanner = document.getElementById('ratesDirtyBanner');
     if (dirtyBanner) dirtyBanner.classList.remove('banner-visible');
+    const handoffErrorBanner = document.getElementById('handoffErrorBanner');
+    if (handoffErrorBanner) handoffErrorBanner.classList.add('hidden');
+    const handoffLoadingBanner = document.getElementById('handoffLoadingBanner');
+    if (handoffLoadingBanner) handoffLoadingBanner.classList.add('hidden');
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* cosmetic only, ignore */ }
   } catch (err) {
     alert('Something went wrong clearing the sheet. Try reloading the page.');
@@ -1151,9 +1764,11 @@ function knownSports() {
 
 // A rule with no match text is the classifyRate() fallback for a title that
 // hit nothing configured (see classifyRate) — real rules always have match
-// text, since validateRates() blocks Parse until every row has one. That
-// makes `!rule.match` a reliable signal for "this shift's $0 is a fallback,
-// not a real rate," distinct everywhere it's displayed or exported.
+// text, and validateMatchedRates() blocks Parse until any rule that
+// actually matched a shift is complete, so a shift on the sheet never
+// carries an incomplete-but-matched rule either. That makes `!rule.match`
+// a reliable signal for "this shift's $0 is a fallback, not a real rate,"
+// distinct everywhere it's displayed or exported.
 function rateLabelFor(rule) {
   if (!rule.match) return '<span class="rate-unmatched">No rate matched</span>';
   if (rule.type === 'per_person') return `$${rule.pricePerPerson ?? 0}/person &times; ${rule.coachShare ?? 0}%`;
@@ -1237,6 +1852,10 @@ function renderResults() {
   const section = document.getElementById('resultsSection');
   const el = document.getElementById('results');
   section.classList.remove('hidden');
+  const handoffErrorBanner = document.getElementById('handoffErrorBanner');
+  if (handoffErrorBanner) handoffErrorBanner.classList.add('hidden');
+  const handoffLoadingBanner = document.getElementById('handoffLoadingBanner');
+  if (handoffLoadingBanner) handoffLoadingBanner.classList.add('hidden');
 
   const { byLocation, grandTotal } = computeGroups(shifts);
   lastResult.grandTotal = grandTotal;

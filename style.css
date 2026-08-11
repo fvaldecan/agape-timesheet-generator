@@ -64,6 +64,18 @@ h1 {
   color: var(--brand-purple);
   border: 2px dashed var(--brand-purple);
 }
+#bookmarkletStaleHint {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: var(--warn-dim);
+  border-left: 4px solid var(--warn);
+  padding: 10px 14px;
+  margin-top: 12px;
+  font-size: 13px;
+  font-family: var(--serif);
+}
+#bookmarkletStaleHint.banner-visible { display: flex; }
 section { background: var(--panel); border: 1px solid var(--line); padding: 24px; margin-bottom: 20px; }
 section h2 {
   font-family: var(--mono);
@@ -133,6 +145,8 @@ summary {
 .rate-move-btn:hover:not(:disabled) { color: var(--brand-purple); border-color: var(--brand-purple); }
 .rate-move-btn:disabled { opacity: 0.3; cursor: default; }
 .rate-row.rate-row-incomplete { border-left: 3px solid var(--warn); }
+.rate-hint { font-size: 12px; color: #5a5f57; font-family: var(--serif); margin: -4px 0 10px 8px; }
+.rate-core-label { font-family: var(--mono); font-size: 12px; font-weight: 600; color: #3a3f38; flex: 0 0 190px; }
 .rate-row input.field-missing { border-color: var(--warn); background: var(--warn-dim); }
 .rate-row input.field-missing::placeholder { color: var(--warn); opacity: 1; }
 .rate-row input, .rate-row select {
@@ -303,6 +317,15 @@ td.num, th.num { text-align: right; font-family: var(--mono); }
   font-size: 13px;
   margin-top: 12px;
   font-family: var(--mono);
+}
+.info-banner {
+  background: #efeef8;
+  border-left: 4px solid var(--brand-purple);
+  color: #3a3f38;
+  font-family: var(--serif);
+  font-size: 14px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
 }
 .warn div { margin-bottom: 4px; }
 .warn-strong {
