@@ -128,6 +128,16 @@
     var sib = h4.nextElementSibling;
     return sib ? sib.textContent.replace(/\s+/g, ' ').trim() : '';
   }
+  // Mirrors parseSchedule()'s displayTitle logic in index.html — combines
+  // Club Automation's generic raw title (e.g. "Group class") with the
+  // specific subtitle so each distinct class gets its own prompt and its
+  // own rate rule, instead of every "Group class" booking collapsing into
+  // one regardless of what class it actually is.
+  function enrichedTitleOf(rawTitle, subtitle) {
+    if (rawTitle === 'Group class') return rawTitle + ': ' + subtitle;
+    if (rawTitle.indexOf('PL') === 0) return 'PL: ' + subtitle;
+    return (rawTitle + ' ' + subtitle).trim();
+  }
   // Deliberately duplicated from classifyRate()'s matching logic in
   // index.html — this is a second hand-sync point beyond the whole-file
   // sync already documented near the bottom of index.html, so keep the
@@ -140,7 +150,11 @@
       var matches = mode === 'startsWith'
         ? title.toUpperCase().indexOf(r.match.trim().toUpperCase()) === 0
         : title.toLowerCase().indexOf(r.match.trim().toLowerCase()) !== -1;
-      if (matches) return true;
+      // A $0 auto-created stub (complete: false) still "matches" here —
+      // it has to, so the app-side stub-creation logic recognizes it next
+      // time — but it must NOT suppress this on-page prompt, or a coach
+      // could never fill it in from Club Automation itself.
+      if (matches && r.complete !== false) return true;
     }
     return false;
   }
@@ -175,12 +189,14 @@
 
   for (var i = 0; i < liveBlocks.length; i++) {
     var t = titleOf(liveBlocks[i]);
+    var sub = subtitleOf(liveBlocks[i]);
     var isBlocked = t.toLowerCase().indexOf('blocked') !== -1;
-    var isEmptySlot = t.indexOf('PL') === 0 && !subtitleOf(liveBlocks[i]);
+    var isEmptySlot = t.indexOf('PL') === 0 && !sub;
     if (isBlocked) { blockedCount++; continue; }
     if (isEmptySlot) { emptyCount++; continue; }
     realCount++;
-    if (!seenTitles[t]) { seenTitles[t] = true; distinctTitles.push(t); }
+    var enrichedT = enrichedTitleOf(t, sub);
+    if (!seenTitles[enrichedT]) { seenTitles[enrichedT] = true; distinctTitles.push(enrichedT); }
 
     overlay.textContent = 'Getting your schedule... ' + (i + 1) + ' of ' + liveBlocks.length + '. Please stay on this page.';
 
