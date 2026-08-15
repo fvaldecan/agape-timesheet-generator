@@ -172,6 +172,34 @@ let state = loadSettings();
 document.getElementById('coachName').value = state.name;
 document.getElementById('compNotes').value = state.compNotes || '';
 
+// ---------------------------------------------------------------------
+// Bookmarklet hand-off — lets the "Get My Schedule" bookmarklet skip the
+// copy/paste step entirely. It opens this page in a new tab (or refocuses
+// an already-open one from a previous week) and pings us; we reply so it
+// knows we're listening — whether we just finished loading or have been
+// sitting open for a while — then it posts the scraped schedule once it's
+// confirmed we're ready.
+//
+// Trust is anchored on `e.source === window.opener`, not on origin: Club
+// Automation's actual origin varies per club (a subdomain per gym), so
+// there's no fixed origin to allowlist. `window.opener` is only ever set
+// if this tab was opened via window.open() from that bookmarklet, and it
+// stays valid across that other tab's own navigations (switching Club
+// Automation weeks doesn't change which tab it is), so checking `e.source`
+// against it is both simpler and stricter than an origin string ever
+// could be here.
+window.addEventListener('message', function (e) {
+  if (!window.opener || e.source !== window.opener) return;
+  if (!e.data || typeof e.data.type !== 'string') return;
+  if (e.data.type === 'AGAPE_PING') {
+    e.source.postMessage({ type: 'AGAPE_READY' }, e.origin);
+  } else if (e.data.type === 'AGAPE_SCHEDULE_DATA' && typeof e.data.html === 'string') {
+    document.getElementById('htmlInput').value = e.data.html;
+    runParse();
+    e.source.postMessage({ type: 'AGAPE_RECEIVED' }, e.origin);
+  }
+});
+
 // Fields left blank by the user must render as blank, not as a made-up
 // number — a $45/hr shown before anyone typed it looks like a real,
 // confirmed rate. "??" only falls through on null/undefined, so an
