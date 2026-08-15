@@ -19,7 +19,48 @@
   </header>
 
   <section>
-    <h2>1. Set up the "Get My Schedule" button (one time only)</h2>
+    <h2>1. Your settings <span class="text-normal">(remembered next time you come back)</span></h2>
+    <div class="row">
+      <label for="coachName" class="field-label-inline">Name on sheet</label>
+      <input id="coachName" type="text" class="text-input input-wide">
+    </div>
+
+    <details open>
+      <summary>Pay rates</summary>
+      <div class="config-grid" id="rateRows"></div>
+      <button class="btn secondary mt-6" onclick="addRateRow()">+ add a rate</button>
+      <p class="hint-sm mt-8">
+        Type a word from your booking titles (like "PL" or "Drill"), choose
+        <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
+        match wins, so put specific rows above general ones. <strong>Per-person split</strong> is
+        for group classes paid per attendee — you'll enter the headcount after pasting. "# people"
+        is editable on every row (handy for a semi-private with 2 students).
+      </p>
+      <div id="ratesDirtyBanner" role="status" aria-live="polite">
+        <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
+        <button class="btn btn-compact" onclick="reapplyRatesToSheet()">Update timesheet</button>
+        <div id="updateTimesheetStatus" class="row status-text" role="status" aria-live="polite"></div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Compensation summary</summary>
+      <p class="hint-sm my-8">
+        Paste the pay-rate section straight from your contract (Word doc or PDF) — same
+        bullets, no need to retype. <strong>Required</strong> — shows up at the bottom of
+        your sheet, on screen and in the download.
+      </p>
+      <label for="compNotes" class="field-label mb-4">Compensation notes</label>
+      <textarea id="compNotes" placeholder="e.g.
+$45/hr on private lessons
+$40/hr on programmed groups, drills, classes"
+        class="textarea-sm"
+        onchange="state.compNotes=this.value;saveSettings();if(lastResult)renderResults();"></textarea>
+    </details>
+  </section>
+
+  <section>
+    <h2>2. Set up the "Get My Schedule" button (one time only)</h2>
     <p class="hint mt-0">
       Grabs your schedule automatically — no more copying it by hand.
     </p>
@@ -56,7 +97,7 @@
   </section>
 
   <section>
-    <h2>2. Paste your schedule</h2>
+    <h2>3. Paste your schedule</h2>
     <p class="hint mt-0">
       Club Automation only shows one week at a time, so for a multi-week pay period, paste
       each week separately. <strong>Parse</strong> shows a breakdown first (blocked, empty,
@@ -79,46 +120,6 @@
       <button class="btn hidden" id="confirmAddBtn" onclick="confirmAdd()" data-goatcounter-click='{"path":"click-add-to-sheet","title":"Add to sheet","event":true}'>Add to sheet</button>
     </div>
     <div id="parseStatus" class="row status-text" role="status" aria-live="polite"></div>
-  </section>
-
-  <section>
-    <h2>3. Your settings <span class="text-normal">(remembered next time you come back)</span></h2>
-    <div class="row">
-      <label for="coachName" class="field-label-inline">Name on sheet</label>
-      <input id="coachName" type="text" class="text-input input-wide">
-    </div>
-
-    <details open>
-      <summary>Pay rates</summary>
-      <div class="config-grid" id="rateRows"></div>
-      <button class="btn secondary mt-6" onclick="addRateRow()">+ add a rate</button>
-      <p class="hint-sm mt-8">
-        Type a word from your booking titles (like "PL" or "Drill"), choose
-        <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
-        match wins, so put specific rows above general ones. <strong>Per-person split</strong> is
-        for group classes paid per attendee — you'll enter the headcount after pasting. "# people"
-        is editable on every row (handy for a semi-private with 2 students).
-      </p>
-      <div id="ratesDirtyBanner" role="status" aria-live="polite">
-        <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
-        <button class="btn btn-compact" onclick="reapplyRatesToSheet()">Update timesheet</button>
-        <div id="updateTimesheetStatus" class="row status-text" role="status" aria-live="polite"></div>
-      </div>
-    </details>
-
-    <details open>
-      <summary>Compensation summary (optional)</summary>
-      <p class="hint-sm my-8">
-        Paste your contract's rate bullets here — same list you'd copy from a Word doc or PDF.
-        Shows up at the bottom of your sheet, on screen and in the download.
-      </p>
-      <label for="compNotes" class="field-label mb-4">Compensation notes</label>
-      <textarea id="compNotes" placeholder="e.g.
-$45/hr on private lessons
-$40/hr on programmed groups, drills, classes"
-        class="textarea-sm"
-        onchange="state.compNotes=this.value;saveSettings();if(lastResult)renderResults();"></textarea>
-    </details>
   </section>
 
   <section id="resultsSection" class="hidden">
