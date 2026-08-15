@@ -19,21 +19,66 @@
   </header>
 
   <section>
-    <h2>1. Set up the "Get My Schedule" button (one time only)</h2>
+    <h2>1. Your settings <span class="text-normal">(remembered next time you come back)</span></h2>
+    <div class="row">
+      <label for="coachName" class="field-label-inline">Name on sheet</label>
+      <input id="coachName" type="text" class="text-input input-wide" oninput="saveSettings();refreshBookmarkletGate();">
+    </div>
+
+    <details open>
+      <summary>Pay rates</summary>
+      <div class="config-grid" id="rateRows"></div>
+      <button class="btn secondary mt-6" onclick="addRateRow()">+ add a rate</button>
+      <p class="hint-sm mt-8">
+        Type a word from your booking titles (like "PL" or "Drill"), choose
+        <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
+        match wins, so put specific rows above general ones. <strong>Per-person split</strong> is
+        for group classes paid per attendee — you'll enter the headcount after pasting. "# people"
+        is editable on every row (handy for a semi-private with 2 students).
+      </p>
+      <div id="ratesDirtyBanner" role="status" aria-live="polite">
+        <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
+        <button class="btn btn-compact" onclick="reapplyRatesToSheet()">Update timesheet</button>
+        <div id="updateTimesheetStatus" class="row status-text" role="status" aria-live="polite"></div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Compensation summary</summary>
+      <p class="hint-sm my-8">
+        Paste the pay-rate section straight from your contract (Word doc or PDF) — same
+        bullets, no need to retype. <strong>Required</strong> — shows up at the bottom of
+        your sheet, on screen and in the download.
+      </p>
+      <label for="compNotes" class="field-label mb-4">Compensation notes</label>
+      <textarea id="compNotes" placeholder="e.g.
+$45/hr on private lessons
+$40/hr on programmed groups, drills, classes"
+        class="textarea-sm"
+        oninput="state.compNotes=this.value;saveSettings();refreshBookmarkletGate();if(lastResult)renderResults();"></textarea>
+    </details>
+  </section>
+
+  <section>
+    <h2>2. Set up the "Get My Schedule" button (one time only)</h2>
     <p class="hint mt-0">
       Grabs your schedule automatically — no more copying it by hand.
     </p>
-    <p class="hint">
+    <div id="bookmarkletSettingsGate" class="warn warn-strong hidden" role="status" aria-live="polite">
+      &#9888; Finish your settings above first (<span id="bookmarkletSettingsGateText"></span>)
+      — the button bakes your current rates in, so it won't price bookings correctly until they're filled in.
+    </div>
+    <p class="hint" id="bookmarkletDragHint">
       <strong>Drag this to your bookmarks bar.</strong> Don't see the bar? Press
       <strong>Ctrl+Shift+B</strong> (<strong>Cmd+Shift+B</strong> on Mac).
     </p>
-    <div class="row gap-16">
+    <div class="row gap-16" id="bookmarkletBtnRow">
       <a class="bookmarklet-btn" id="bookmarkletBtn" href="javascript:void(0);"
          onclick="alert('Drag this button up to your bookmarks bar instead of clicking it.'); return false;">
         &#128279; Get My Schedule
       </a>
     </div>
-    <details class="mt-12">
+    <details class="mt-12" id="bookmarkletManualInstallDetails">
       <summary>Dragging isn't working? Copy and paste it in instead</summary>
       <div class="detail-body">
         <ol class="pl-18">
@@ -56,7 +101,7 @@
   </section>
 
   <section>
-    <h2>2. Paste your schedule</h2>
+    <h2>3. Paste your schedule</h2>
     <p class="hint mt-0">
       Club Automation only shows one week at a time, so for a multi-week pay period, paste
       each week separately. <strong>Parse</strong> shows a breakdown first (blocked, empty,
@@ -79,46 +124,6 @@
       <button class="btn hidden" id="confirmAddBtn" onclick="confirmAdd()" data-goatcounter-click='{"path":"click-add-to-sheet","title":"Add to sheet","event":true}'>Add to sheet</button>
     </div>
     <div id="parseStatus" class="row status-text" role="status" aria-live="polite"></div>
-  </section>
-
-  <section>
-    <h2>3. Your settings <span class="text-normal">(remembered next time you come back)</span></h2>
-    <div class="row">
-      <label for="coachName" class="field-label-inline">Name on sheet</label>
-      <input id="coachName" type="text" class="text-input input-wide">
-    </div>
-
-    <details open>
-      <summary>Pay rates</summary>
-      <div class="config-grid" id="rateRows"></div>
-      <button class="btn secondary mt-6" onclick="addRateRow()">+ add a rate</button>
-      <p class="hint-sm mt-8">
-        Type a word from your booking titles (like "PL" or "Drill"), choose
-        <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
-        match wins, so put specific rows above general ones. <strong>Per-person split</strong> is
-        for group classes paid per attendee — you'll enter the headcount after pasting. "# people"
-        is editable on every row (handy for a semi-private with 2 students).
-      </p>
-      <div id="ratesDirtyBanner" role="status" aria-live="polite">
-        <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
-        <button class="btn btn-compact" onclick="reapplyRatesToSheet()">Update timesheet</button>
-        <div id="updateTimesheetStatus" class="row status-text" role="status" aria-live="polite"></div>
-      </div>
-    </details>
-
-    <details open>
-      <summary>Compensation summary (optional)</summary>
-      <p class="hint-sm my-8">
-        Paste your contract's rate bullets here — same list you'd copy from a Word doc or PDF.
-        Shows up at the bottom of your sheet, on screen and in the download.
-      </p>
-      <label for="compNotes" class="field-label mb-4">Compensation notes</label>
-      <textarea id="compNotes" placeholder="e.g.
-$45/hr on private lessons
-$40/hr on programmed groups, drills, classes"
-        class="textarea-sm"
-        onchange="state.compNotes=this.value;saveSettings();if(lastResult)renderResults();"></textarea>
-    </details>
   </section>
 
   <section id="resultsSection" class="hidden">
@@ -437,6 +442,30 @@ function markRatesDirty() {
   const banner = document.getElementById('ratesDirtyBanner');
   if (banner) banner.classList.toggle('banner-visible', lastResult && lastResult.shifts.length > 0);
   refreshRateStatusOnEdit();
+  refreshBookmarkletGate();
+}
+
+// The bookmarklet button bakes the current name/rates/compNotes in at drag
+// time, so an incomplete setup here means every schedule pulled later is
+// silently mispriced — better to block dragging it until settings are done
+// than let a coach discover a $0 rate after the fact.
+function settingsMissingPieces() {
+  const missing = [];
+  if (!document.getElementById('coachName').value.trim()) missing.push('your name');
+  if (!(state.compNotes || '').trim()) missing.push('compensation notes');
+  if (state.rates.some(r => rateRuleMissingFields(r).length)) missing.push('every pay rate filled in');
+  return missing;
+}
+function refreshBookmarkletGate() {
+  const missing = settingsMissingPieces();
+  const gate = document.getElementById('bookmarkletSettingsGate');
+  const gateText = document.getElementById('bookmarkletSettingsGateText');
+  if (gateText) gateText.textContent = missing.join(', ');
+  if (gate) gate.classList.toggle('hidden', missing.length === 0);
+  ['bookmarkletDragHint', 'bookmarkletBtnRow', 'bookmarkletManualInstallDetails'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', missing.length > 0);
+  });
 }
 function reapplyRatesToSheet() {
   const updateTimesheetStatus = document.getElementById('updateTimesheetStatus');
@@ -474,6 +503,7 @@ function parseBulletLines(text) {
 }
 
 renderRates();
+refreshBookmarkletGate();
 
 // This must be the full scraping logic, not a loader that fetches
 // bookmarklet.js over the network — Club Automation's CSP blocks
