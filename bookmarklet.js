@@ -167,6 +167,12 @@
   }
 
   var htmlOut = clone.outerHTML;
+
+  // The scrape loop above is done — swap the overlay's stale "N of M"
+  // progress text for what's actually happening next, so it doesn't look
+  // stuck during the hand-off (usually quick, but not instant).
+  overlay.textContent = 'Sending to your timesheet app...';
+
   var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').'];
   if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).');
   if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.');
