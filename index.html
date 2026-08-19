@@ -348,6 +348,24 @@ function addRateRow() {
   markRatesDirty();
 }
 
+// Copies the shift's own type text into the new rule's match field, so a
+// coach doesn't have to retype the exact booking title by hand (and risk a
+// typo that leaves it still unmatched) — same shortcut the "No rate
+// matched" summary banner already points them toward, just one click.
+function addRateRuleFromShift(id) {
+  const shift = lastResult && lastResult.shifts.find(s => s.id === id);
+  if (!shift) return;
+  state.rates.push({ match: shift.type, matchMode: 'contains', type: 'hourly', mode: 'flat', defaultPeople: 1 });
+  saveSettings();
+  renderRates();
+  markRatesDirty();
+  const newRateInput = document.querySelector('#rateRows .rate-row:last-child input[aria-label="Pay per hour"]');
+  if (newRateInput) {
+    newRateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    newRateInput.focus();
+  }
+}
+
 // Keyboard-operable equivalent of the mouse-only drag-to-reorder below —
 // order is meaningful ("first match wins"), so it can't be mouse-only.
 // Swaps two adjacent rows in place; out-of-range moves (top row up,
@@ -1421,6 +1439,7 @@ function renderResults() {
             <div class="field">
               <label>Hourly wage</label>
               <div class="field-static">${rateLabelFor(r.rule)}</div>
+              ${!r.rule.match ? `<button type="button" class="btn-compact mt-4" onclick="addRateRuleFromShift(${r.id})">+ Add rate rule for this</button>` : ''}
             </div>
             <div class="field">
               <label># people</label>
