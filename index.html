@@ -130,10 +130,10 @@ $40/hr on programmed groups, drills, classes"
     &#9203; Waiting for your schedule from Club Automation — keep that tab open...
   </div>
 
-  <section id="resultsSection" class="hidden">
+  <section id="resultsSection">
     <h2>4. Timesheet</h2>
     <div id="results"></div>
-    <div class="actions">
+    <div class="actions" id="resultsActions">
       <button class="btn" onclick="printTimesheet()" data-goatcounter-click='{"path":"click-print","title":"Print / Save as PDF","event":true}'>Print / Save as PDF</button>
       <button class="btn secondary" onclick="downloadDocx()" data-goatcounter-click='{"path":"click-download-docx","title":"Download .docx","event":true}'>Download .docx</button>
       <button class="btn secondary" onclick="downloadCsv()" data-goatcounter-click='{"path":"click-download-csv","title":"Download .csv","event":true}'>Download .csv</button>
@@ -537,6 +537,7 @@ function parseBulletLines(text) {
 
 renderRates();
 refreshBookmarkletGate();
+renderEmptyResultsState();
 
 // This must be the full scraping logic, not a loader that fetches
 // bookmarklet.js over the network — Club Automation's CSP blocks
@@ -939,6 +940,13 @@ function attentionReasons(shift, conflictIds) {
   const reasons = [];
   if (!shift.location) reasons.push('missing location');
   if (!shift.rule.match) reasons.push('no matching rate');
+  // A *complete* rule can still price a specific shift at $0 — a literal $0
+  // rate someone typed, or a per-person rule where real attendance came back
+  // as 0 (amountFor's `|| 0` doesn't distinguish "no data" from "really
+  // zero"). Skip when manualAmount is set — a coach's deliberate override,
+  // including a deliberate $0, isn't a mistake to flag.
+  const isManualOverride = shift.manualAmount !== null && shift.manualAmount !== undefined;
+  if (shift.rule.match && !isManualOverride && amountFor(shift) === 0) reasons.push('computes to $0.00 despite a matched rate');
   if (conflictIds.badOrderIds.has(shift.id)) reasons.push('end time before start time');
   if (conflictIds.overlapIds.has(shift.id)) reasons.push('overlaps another entry');
   return reasons;
@@ -1113,6 +1121,16 @@ function confirmAdd() {
   renderResults();
 }
 
+// The Timesheet section is always visible now rather than hidden until a
+// sheet exists — a coach landing on the page (or clearing it) should see
+// where their results will go, not have the whole section disappear.
+function renderEmptyResultsState() {
+  const results = document.getElementById('results');
+  if (results) results.innerHTML = '<div class="empty">No entries yet — paste your schedule above to get started.</div>';
+  const actions = document.getElementById('resultsActions');
+  if (actions) actions.classList.add('hidden');
+}
+
 function clearAll() {
   if (lastResult && lastResult.shifts.length > 0) {
     if (!confirm('Clear the whole sheet and start over? This wipes every entry you\'ve added — it can\'t be undone.')) return;
@@ -1132,10 +1150,7 @@ function clearAll() {
     if (updateTimesheetStatus) { updateTimesheetStatus.textContent = ''; updateTimesheetStatus.className = ''; updateTimesheetStatus.dataset.rateError = ''; }
     const confirmBtn = document.getElementById('confirmAddBtn');
     if (confirmBtn) confirmBtn.classList.add('hidden');
-    const resultsSection = document.getElementById('resultsSection');
-    if (resultsSection) resultsSection.classList.add('hidden');
-    const results = document.getElementById('results');
-    if (results) results.innerHTML = '';
+    renderEmptyResultsState();
     const dirtyBanner = document.getElementById('ratesDirtyBanner');
     if (dirtyBanner) dirtyBanner.classList.remove('banner-visible');
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* cosmetic only, ignore */ }
@@ -1338,9 +1353,9 @@ function formatTimeRange(startTime, endTime) {
 
 function renderResults() {
   const { shifts, name } = lastResult;
-  const section = document.getElementById('resultsSection');
   const el = document.getElementById('results');
-  section.classList.remove('hidden');
+  const actions = document.getElementById('resultsActions');
+  if (actions) actions.classList.remove('hidden');
 
   const { byLocation, grandTotal } = computeGroups(shifts);
   lastResult.grandTotal = grandTotal;
@@ -1357,10 +1372,17 @@ function renderResults() {
   html += `<datalist id="sportOptions">${knownSports().map(s => `<option value="${escapeHtml(s)}">`).join('')}</datalist>`;
   const unassignedCount = (byLocation['Unassigned'] || []).length;
   const unmatchedRateCount = shifts.filter(s => !s.rule.match).length;
+  const zeroPayCount = shifts.filter(s => {
+    const isManualOverride = s.manualAmount !== null && s.manualAmount !== undefined;
+    return s.rule.match && !isManualOverride && amountFor(s) === 0;
+  }).length;
   const { badOrderIds, overlapIds } = computeConflictIds(shifts);
 
   if (unmatchedRateCount > 0) {
     html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unmatchedRateCount} entr${unmatchedRateCount === 1 ? 'y has' : 'ies have'} no matching rate rule</strong> — showing $0.00, marked "No rate matched" below. Add a rate rule in Settings, or fix the row's Type of class text so it matches one.</div>`;
+  }
+  if (zeroPayCount > 0) {
+    html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${zeroPayCount} entr${zeroPayCount === 1 ? 'y computes' : 'ies compute'} to $0.00 despite a matched rate</strong> — double check the rate or headcount below, or set a manual amount if that's intentional.</div>`;
   }
   if (unassignedCount > 0) {
     html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unassignedCount} entr${unassignedCount === 1 ? 'y needs' : 'ies need'} a location</strong> — pick one per row below in UNASSIGNED.</div>`;
