@@ -130,10 +130,10 @@ $40/hr on programmed groups, drills, classes"
     &#9203; Waiting for your schedule from Club Automation — keep that tab open...
   </div>
 
-  <section id="resultsSection" class="hidden">
+  <section id="resultsSection">
     <h2>4. Timesheet</h2>
     <div id="results"></div>
-    <div class="actions">
+    <div class="actions" id="resultsActions">
       <button class="btn" onclick="printTimesheet()" data-goatcounter-click='{"path":"click-print","title":"Print / Save as PDF","event":true}'>Print / Save as PDF</button>
       <button class="btn secondary" onclick="downloadDocx()" data-goatcounter-click='{"path":"click-download-docx","title":"Download .docx","event":true}'>Download .docx</button>
       <button class="btn secondary" onclick="downloadCsv()" data-goatcounter-click='{"path":"click-download-csv","title":"Download .csv","event":true}'>Download .csv</button>
@@ -537,6 +537,7 @@ function parseBulletLines(text) {
 
 renderRates();
 refreshBookmarkletGate();
+renderEmptyResultsState();
 
 // This must be the full scraping logic, not a loader that fetches
 // bookmarklet.js over the network — Club Automation's CSP blocks
@@ -1113,6 +1114,16 @@ function confirmAdd() {
   renderResults();
 }
 
+// The Timesheet section is always visible now rather than hidden until a
+// sheet exists — a coach landing on the page (or clearing it) should see
+// where their results will go, not have the whole section disappear.
+function renderEmptyResultsState() {
+  const results = document.getElementById('results');
+  if (results) results.innerHTML = '<div class="empty">No entries yet — paste your schedule above to get started.</div>';
+  const actions = document.getElementById('resultsActions');
+  if (actions) actions.classList.add('hidden');
+}
+
 function clearAll() {
   if (lastResult && lastResult.shifts.length > 0) {
     if (!confirm('Clear the whole sheet and start over? This wipes every entry you\'ve added — it can\'t be undone.')) return;
@@ -1132,10 +1143,7 @@ function clearAll() {
     if (updateTimesheetStatus) { updateTimesheetStatus.textContent = ''; updateTimesheetStatus.className = ''; updateTimesheetStatus.dataset.rateError = ''; }
     const confirmBtn = document.getElementById('confirmAddBtn');
     if (confirmBtn) confirmBtn.classList.add('hidden');
-    const resultsSection = document.getElementById('resultsSection');
-    if (resultsSection) resultsSection.classList.add('hidden');
-    const results = document.getElementById('results');
-    if (results) results.innerHTML = '';
+    renderEmptyResultsState();
     const dirtyBanner = document.getElementById('ratesDirtyBanner');
     if (dirtyBanner) dirtyBanner.classList.remove('banner-visible');
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* cosmetic only, ignore */ }
@@ -1338,9 +1346,9 @@ function formatTimeRange(startTime, endTime) {
 
 function renderResults() {
   const { shifts, name } = lastResult;
-  const section = document.getElementById('resultsSection');
   const el = document.getElementById('results');
-  section.classList.remove('hidden');
+  const actions = document.getElementById('resultsActions');
+  if (actions) actions.classList.remove('hidden');
 
   const { byLocation, grandTotal } = computeGroups(shifts);
   lastResult.grandTotal = grandTotal;
