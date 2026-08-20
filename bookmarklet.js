@@ -12,6 +12,142 @@
     return;
   }
   var el = document.getElementById('court_schedule');
+
+  // ---------------------------------------------------------------------
+  // Auto-fetch a date range from Club Automation, instead of relying on
+  // its own date-nav UI already being on the right week. Not wired into
+  // the main flow yet — these are pure helpers, exercised by a sandboxed
+  // test harness (mocked fetch + synthetic HTML) before anything below
+  // calls them. Pay periods are 14 days, Monday-anchored; ANCHOR_MONDAY
+  // is a confirmed period-start Monday, used only to find which 14-day
+  // bucket a given date falls into (re-verify this still holds before
+  // trusting it blindly — pay periods could shift).
+  // ---------------------------------------------------------------------
+  var DAY_MS = 24 * 60 * 60 * 1000;
+  var ANCHOR_MONDAY = new Date(Date.UTC(2026, 6, 20));
+  function dateFromYMD(y, m, d) { return new Date(Date.UTC(y, m - 1, d)); }
+  function addDaysUTC(date, n) { return new Date(date.getTime() + n * DAY_MS); }
+  function daysBetweenUTC(a, b) { return Math.round((b.getTime() - a.getTime()) / DAY_MS); }
+  function formatDateMDY(date) {
+    return String(date.getUTCMonth() + 1).padStart(2, '0') + '/' + String(date.getUTCDate()).padStart(2, '0') + '/' + date.getUTCFullYear();
+  }
+  function todayAsDateOnly() {
+    var now = new Date();
+    return dateFromYMD(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  }
+  // Floors (today - anchor) / 14d to find which pay period "today" falls in.
+  function currentPeriodRange(today) {
+    var daysSinceAnchor = daysBetweenUTC(ANCHOR_MONDAY, today);
+    var periodIndex = Math.floor(daysSinceAnchor / 14);
+    var periodStart = addDaysUTC(ANCHOR_MONDAY, periodIndex * 14);
+    return { start: periodStart, end: addDaysUTC(periodStart, 13) };
+  }
+  // Only a 7-day fetch is confirmed to work, so a longer/odd-aligned range
+  // gets covered by whole Monday-aligned weeks, rounding OUT past both
+  // ends rather than risking an unconfirmed partial-week request.
+  function weekChunksCovering(start, end) {
+    var offsetIntoWeek = ((daysBetweenUTC(ANCHOR_MONDAY, start) % 7) + 7) % 7;
+    var chunkStart = addDaysUTC(start, -offsetIntoWeek);
+    var chunks = [];
+    while (chunkStart.getTime() <= end.getTime()) {
+      chunks.push({ start: chunkStart, end: addDaysUTC(chunkStart, 6) });
+      chunkStart = addDaysUTC(chunkStart, 7);
+    }
+    return chunks;
+  }
+  // A hidden input already on the staff-schedule page — no separate lookup.
+  function getUserId() {
+    var input = document.getElementById('filter-user_id');
+    return input && input.value ? input.value : null;
+  }
+  function fetchWeekDoc(userId, weekStart) {
+    return fetch('/schedule/user-week', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+      body: new URLSearchParams({
+        multiselectdata: '',
+        season: '0',
+        schedule_id: '',
+        user_id: userId,
+        date: formatDateMDY(weekStart),
+        date_end: formatDateMDY(addDaysUTC(weekStart, 6)),
+        reload: '1',
+        save: '0',
+        pageType: 'user-week',
+        readonly: '1'
+      }),
+      credentials: 'same-origin'
+    }).then(function (resp) {
+      if (!resp.ok) throw new Error('bad status ' + resp.status);
+      return resp.text();
+    }).then(function (text) {
+      return new DOMParser().parseFromString(text, 'text/html');
+    });
+  }
+  // Trims fetched cells back to exactly what was requested — weekChunksCovering
+  // rounds OUT to whole weeks, so a coach catching up one missed day must not
+  // silently re-include a whole neighboring week that may already be on a
+  // previous timesheet.
+  function filterCellsByDateRange(container, start, end) {
+    container.querySelectorAll('td[id^="court_"]').forEach(function (td) {
+      var m = /^court_(\d{4})-(\d{2})-(\d{2})_row_/.exec(td.id);
+      if (!m) { td.remove(); return; }
+      var cellDate = dateFromYMD(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
+      if (cellDate.getTime() < start.getTime() || cellDate.getTime() > end.getTime()) td.remove();
+    });
+  }
+  // Fetches every needed week chunk sequentially (150ms apart, same courtesy
+  // throttle as the per-event fetch below), merges all court_* cells into one
+  // synthetic container, trims to the exact requested range. Returns null on
+  // any failure — network error, non-2xx, or zero real cells across every
+  // fetched week — checked BEFORE date-filtering, since a legitimately empty
+  // custom sub-range is fine and shouldn't count as a failure.
+  //
+  // Critical: the merged <td> cells must land inside a real
+  // <table><tbody><tr>, not loose under the wrapper <div> — appendChild()
+  // doesn't enforce HTML nesting rules, so this looks fine as an in-memory
+  // tree, but the final payload gets serialized to a string and re-parsed on
+  // the app side, and HTML5's parser silently drops a <td> that isn't inside
+  // a <table><tr> when parsing from text. Skipping the wrapper reproduces
+  // exactly as "No events found," raw HTML dumped unparsed into the paste box.
+  async function fetchScheduleRange(userId, start, end) {
+    var chunks = weekChunksCovering(start, end);
+    var docs = [];
+    for (var i = 0; i < chunks.length; i++) {
+      var doc;
+      try {
+        doc = await fetchWeekDoc(userId, chunks[i].start);
+      } catch (e) {
+        return null;
+      }
+      docs.push(doc);
+      if (i < chunks.length - 1) await new Promise(function (r) { setTimeout(r, 150); });
+    }
+    var rawCellCount = docs.reduce(function (sum, d) { return sum + d.querySelectorAll('td[id^="court_"]').length; }, 0);
+    if (rawCellCount === 0) return null;
+    var container = document.createElement('div');
+    container.id = 'court_schedule';
+    var table = document.createElement('table');
+    var tbody = document.createElement('tbody');
+    var tr = document.createElement('tr');
+    table.appendChild(tbody);
+    tbody.appendChild(tr);
+    container.appendChild(table);
+    var seenIds = {};
+    docs.forEach(function (doc) {
+      doc.querySelectorAll('td[id^="court_"]').forEach(function (td) {
+        if (seenIds[td.id]) return;
+        seenIds[td.id] = true;
+        // Fetched nodes belong to a separate DOMParser document — importNode
+        // is required to bring one into this document before it can be
+        // appended here.
+        tr.appendChild(document.importNode(td, true));
+      });
+    });
+    filterCellsByDateRange(container, start, end);
+    return container;
+  }
+
   if (!el) {
     alert('Could not find your schedule on this page. Make sure you have your weekly schedule open (not the login page or another screen), and that it has finished loading, then try again.');
     return;
