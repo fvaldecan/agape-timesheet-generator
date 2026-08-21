@@ -12,9 +12,172 @@
     return;
   }
   var el = document.getElementById('court_schedule');
-  if (!el) {
-    alert('Could not find your schedule on this page. Make sure you have your weekly schedule open (not the login page or another screen), and that it has finished loading, then try again.');
-    return;
+
+  // ---------------------------------------------------------------------
+  // Auto-fetch a date range from Club Automation, instead of relying on
+  // its own date-nav UI already being on the right week. Not wired into
+  // the main flow yet — these are pure helpers, exercised by a sandboxed
+  // test harness (mocked fetch + synthetic HTML) before anything below
+  // calls them. Pay periods are 14 days, Monday-anchored; ANCHOR_MONDAY
+  // is a confirmed period-start Monday, used only to find which 14-day
+  // bucket a given date falls into (re-verify this still holds before
+  // trusting it blindly — pay periods could shift).
+  // ---------------------------------------------------------------------
+  var DAY_MS = 24 * 60 * 60 * 1000;
+  var ANCHOR_MONDAY = new Date(Date.UTC(2026, 6, 20));
+  function dateFromYMD(y, m, d) { return new Date(Date.UTC(y, m - 1, d)); }
+  function addDaysUTC(date, n) { return new Date(date.getTime() + n * DAY_MS); }
+  function daysBetweenUTC(a, b) { return Math.round((b.getTime() - a.getTime()) / DAY_MS); }
+  function formatDateMDY(date) {
+    return String(date.getUTCMonth() + 1).padStart(2, '0') + '/' + String(date.getUTCDate()).padStart(2, '0') + '/' + date.getUTCFullYear();
+  }
+  function todayAsDateOnly() {
+    var now = new Date();
+    return dateFromYMD(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  }
+  // Floors (today - anchor) / 14d to find which pay period "today" falls in.
+  function currentPeriodRange(today) {
+    var daysSinceAnchor = daysBetweenUTC(ANCHOR_MONDAY, today);
+    var periodIndex = Math.floor(daysSinceAnchor / 14);
+    var periodStart = addDaysUTC(ANCHOR_MONDAY, periodIndex * 14);
+    return { start: periodStart, end: addDaysUTC(periodStart, 13) };
+  }
+  // Only a 7-day fetch is confirmed to work, so a longer/odd-aligned range
+  // gets covered by whole Monday-aligned weeks, rounding OUT past both
+  // ends rather than risking an unconfirmed partial-week request.
+  function weekChunksCovering(start, end) {
+    var offsetIntoWeek = ((daysBetweenUTC(ANCHOR_MONDAY, start) % 7) + 7) % 7;
+    var chunkStart = addDaysUTC(start, -offsetIntoWeek);
+    var chunks = [];
+    while (chunkStart.getTime() <= end.getTime()) {
+      chunks.push({ start: chunkStart, end: addDaysUTC(chunkStart, 6) });
+      chunkStart = addDaysUTC(chunkStart, 7);
+    }
+    return chunks;
+  }
+  // A hidden input already on the staff-schedule page — no separate lookup.
+  function getUserId() {
+    var input = document.getElementById('filter-user_id');
+    return input && input.value ? input.value : null;
+  }
+  function fetchWeekDoc(userId, weekStart) {
+    return fetch('/schedule/user-week', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+      body: new URLSearchParams({
+        multiselectdata: '',
+        season: '0',
+        schedule_id: '',
+        user_id: userId,
+        date: formatDateMDY(weekStart),
+        date_end: formatDateMDY(addDaysUTC(weekStart, 6)),
+        reload: '1',
+        save: '0',
+        pageType: 'user-week',
+        readonly: '1'
+      }),
+      credentials: 'same-origin'
+    }).then(function (resp) {
+      if (!resp.ok) throw new Error('bad status ' + resp.status);
+      return resp.text();
+    }).then(function (text) {
+      return new DOMParser().parseFromString(text, 'text/html');
+    });
+  }
+  // Trims fetched cells back to exactly what was requested — weekChunksCovering
+  // rounds OUT to whole weeks, so a coach catching up one missed day must not
+  // silently re-include a whole neighboring week that may already be on a
+  // previous timesheet.
+  function filterCellsByDateRange(container, start, end) {
+    container.querySelectorAll('td[id^="court_"]').forEach(function (td) {
+      var m = /^court_(\d{4})-(\d{2})-(\d{2})_row_/.exec(td.id);
+      if (!m) { td.remove(); return; }
+      var cellDate = dateFromYMD(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
+      if (cellDate.getTime() < start.getTime() || cellDate.getTime() > end.getTime()) td.remove();
+    });
+  }
+  // Fetches every needed week chunk sequentially (150ms apart, same courtesy
+  // throttle as the per-event fetch below), merges all court_* cells into one
+  // synthetic container, trims to the exact requested range. Returns null on
+  // any failure — network error, non-2xx, or zero real cells across every
+  // fetched week — checked BEFORE date-filtering, since a legitimately empty
+  // custom sub-range is fine and shouldn't count as a failure.
+  //
+  // Critical: the merged <td> cells must land inside a real
+  // <table><tbody><tr>, not loose under the wrapper <div> — appendChild()
+  // doesn't enforce HTML nesting rules, so this looks fine as an in-memory
+  // tree, but the final payload gets serialized to a string and re-parsed on
+  // the app side, and HTML5's parser silently drops a <td> that isn't inside
+  // a <table><tr> when parsing from text. Skipping the wrapper reproduces
+  // exactly as "No events found," raw HTML dumped unparsed into the paste box.
+  async function fetchScheduleRange(userId, start, end) {
+    var chunks = weekChunksCovering(start, end);
+    var docs = [];
+    for (var i = 0; i < chunks.length; i++) {
+      var doc;
+      try {
+        doc = await fetchWeekDoc(userId, chunks[i].start);
+      } catch (e) {
+        return null;
+      }
+      docs.push(doc);
+      if (i < chunks.length - 1) await new Promise(function (r) { setTimeout(r, 150); });
+    }
+    var rawCellCount = docs.reduce(function (sum, d) { return sum + d.querySelectorAll('td[id^="court_"]').length; }, 0);
+    if (rawCellCount === 0) return null;
+    var container = document.createElement('div');
+    container.id = 'court_schedule';
+    var table = document.createElement('table');
+    var tbody = document.createElement('tbody');
+    var tr = document.createElement('tr');
+    table.appendChild(tbody);
+    tbody.appendChild(tr);
+    container.appendChild(table);
+    var seenIds = {};
+    docs.forEach(function (doc) {
+      doc.querySelectorAll('td[id^="court_"]').forEach(function (td) {
+        if (seenIds[td.id]) return;
+        seenIds[td.id] = true;
+        // Fetched nodes belong to a separate DOMParser document — importNode
+        // is required to bring one into this document before it can be
+        // appended here.
+        tr.appendChild(document.importNode(td, true));
+      });
+    });
+    filterCellsByDateRange(container, start, end);
+    return container;
+  }
+  // The custom-range entry point: two typed MM/DD/YYYY prompts with a
+  // retry-until-valid loop. A calendar-picker upgrade (native
+  // <input type="date"> in the toast) is a separate future improvement —
+  // out of scope here, this just needs to work.
+  function parseMDY(raw) {
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((raw || '').trim());
+    if (!m) return null;
+    var mo = parseInt(m[1], 10), d = parseInt(m[2], 10), y = parseInt(m[3], 10);
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    var date = dateFromYMD(y, mo, d);
+    // Reject a silently-rolled-over invalid date (e.g. Feb 30 -> Mar 2).
+    if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return null;
+    return date;
+  }
+  function promptForDate(question) {
+    while (true) {
+      var raw = window.prompt(question);
+      if (raw === null) return null;
+      var parsed = parseMDY(raw);
+      if (!parsed) { alert("That doesn't look like a valid date — use MM/DD/YYYY, e.g. 08/17/2026."); continue; }
+      return parsed;
+    }
+  }
+  function promptForDateRange() {
+    var start = promptForDate('Enter the start date for your custom range (MM/DD/YYYY):');
+    if (!start) return null;
+    var end = promptForDate('Enter the end date for your custom range (MM/DD/YYYY):');
+    if (!end) return null;
+    if (end.getTime() < start.getTime()) { alert('End date needs to be on or after the start date.'); return null; }
+    if (daysBetweenUTC(start, end) + 1 > 60) { alert("That's a big range (more than 60 days) — double check the dates."); return null; }
+    return { start: start, end: end };
   }
 
   // Open (or refocus) the app tab synchronously, in the same click gesture
@@ -82,6 +245,50 @@
   // compounds through ancestors with no way for a child to opt back out.
   // Being a sibling of body instead of a descendant dodges that entirely.
   document.documentElement.appendChild(overlay);
+
+  // Try to auto-fetch the requested range before falling back to whatever's
+  // currently on screen. An unconditional ask on every click (not just when
+  // nothing's on screen) — even a coach who already navigated to the right
+  // week benefits from covering a whole multi-week pay period in one click
+  // instead of one-week-at-a-time. A deliberate Cancel of the whole flow
+  // (declining the current period, then also cancelling the custom-range
+  // prompt) falls through to el as-is with no fallback notice — declining
+  // isn't a failure. Only an *attempted* fetch that didn't pan out sets
+  // usedFallback, since an unnoticed incomplete auto-fetch is a real
+  // payroll-correctness risk and must never fail silently.
+  var usedFallback = false;
+  var userId = getUserId();
+  if (userId) {
+    var currentPeriod = currentPeriodRange(todayAsDateOnly());
+    var wantsCurrentPeriod = confirm(
+      'Get your current pay period automatically?\n\n' +
+      formatDateMDY(currentPeriod.start) + ' - ' + formatDateMDY(currentPeriod.end) +
+      '\n\nOK = yes, fetch that period now.\nCancel = no, I\'ll enter a different date range instead (e.g. to catch up a missed period).'
+    );
+    var requestedRange = wantsCurrentPeriod ? currentPeriod : promptForDateRange();
+    if (requestedRange) {
+      var fetched = null;
+      try { fetched = await fetchScheduleRange(userId, requestedRange.start, requestedRange.end); } catch (e) { fetched = null; }
+      if (fetched) {
+        el = fetched;
+      } else {
+        usedFallback = true;
+      }
+    }
+  } else {
+    usedFallback = true;
+  }
+
+  if (!el) {
+    // pingTimer is already running by this point (unlike before this PR,
+    // when this check ran ahead of window.open()) — clear it explicitly, or
+    // it pings the app tab every 300ms forever, since nothing else in this
+    // early-abort path would ever stop it.
+    if (pingTimer) clearInterval(pingTimer);
+    overlay.remove();
+    alert('Could not find your schedule on this page. Make sure you have your weekly schedule open (not the login page or another screen), and that it has finished loading, then try again.');
+    return;
+  }
 
   function titleOf(block) {
     var h4 = block.querySelector('h4');
@@ -174,6 +381,7 @@
   overlay.textContent = 'Sending to your timesheet app...';
 
   var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').'];
+  if (usedFallback) summaryLines.push("Couldn't auto-fetch the full date range — only grabbed what's currently on screen. Navigate to any missing week and click the button again if needed.");
   if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).');
   if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.');
   var msg = summaryLines.join('\n');
