@@ -147,10 +147,37 @@
     filterCellsByDateRange(container, start, end);
     return container;
   }
-
-  if (!el) {
-    alert('Could not find your schedule on this page. Make sure you have your weekly schedule open (not the login page or another screen), and that it has finished loading, then try again.');
-    return;
+  // The custom-range entry point: two typed MM/DD/YYYY prompts with a
+  // retry-until-valid loop. A calendar-picker upgrade (native
+  // <input type="date"> in the toast) is a separate future improvement —
+  // out of scope here, this just needs to work.
+  function parseMDY(raw) {
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((raw || '').trim());
+    if (!m) return null;
+    var mo = parseInt(m[1], 10), d = parseInt(m[2], 10), y = parseInt(m[3], 10);
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    var date = dateFromYMD(y, mo, d);
+    // Reject a silently-rolled-over invalid date (e.g. Feb 30 -> Mar 2).
+    if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return null;
+    return date;
+  }
+  function promptForDate(question) {
+    while (true) {
+      var raw = window.prompt(question);
+      if (raw === null) return null;
+      var parsed = parseMDY(raw);
+      if (!parsed) { alert("That doesn't look like a valid date — use MM/DD/YYYY, e.g. 08/17/2026."); continue; }
+      return parsed;
+    }
+  }
+  function promptForDateRange() {
+    var start = promptForDate('Enter the start date for your custom range (MM/DD/YYYY):');
+    if (!start) return null;
+    var end = promptForDate('Enter the end date for your custom range (MM/DD/YYYY):');
+    if (!end) return null;
+    if (end.getTime() < start.getTime()) { alert('End date needs to be on or after the start date.'); return null; }
+    if (daysBetweenUTC(start, end) + 1 > 60) { alert("That's a big range (more than 60 days) — double check the dates."); return null; }
+    return { start: start, end: end };
   }
 
   // Open (or refocus) the app tab synchronously, in the same click gesture
@@ -218,6 +245,50 @@
   // compounds through ancestors with no way for a child to opt back out.
   // Being a sibling of body instead of a descendant dodges that entirely.
   document.documentElement.appendChild(overlay);
+
+  // Try to auto-fetch the requested range before falling back to whatever's
+  // currently on screen. An unconditional ask on every click (not just when
+  // nothing's on screen) — even a coach who already navigated to the right
+  // week benefits from covering a whole multi-week pay period in one click
+  // instead of one-week-at-a-time. A deliberate Cancel of the whole flow
+  // (declining the current period, then also cancelling the custom-range
+  // prompt) falls through to el as-is with no fallback notice — declining
+  // isn't a failure. Only an *attempted* fetch that didn't pan out sets
+  // usedFallback, since an unnoticed incomplete auto-fetch is a real
+  // payroll-correctness risk and must never fail silently.
+  var usedFallback = false;
+  var userId = getUserId();
+  if (userId) {
+    var currentPeriod = currentPeriodRange(todayAsDateOnly());
+    var wantsCurrentPeriod = confirm(
+      'Get your current pay period automatically?\n\n' +
+      formatDateMDY(currentPeriod.start) + ' - ' + formatDateMDY(currentPeriod.end) +
+      '\n\nOK = yes, fetch that period now.\nCancel = no, I\'ll enter a different date range instead (e.g. to catch up a missed period).'
+    );
+    var requestedRange = wantsCurrentPeriod ? currentPeriod : promptForDateRange();
+    if (requestedRange) {
+      var fetched = null;
+      try { fetched = await fetchScheduleRange(userId, requestedRange.start, requestedRange.end); } catch (e) { fetched = null; }
+      if (fetched) {
+        el = fetched;
+      } else {
+        usedFallback = true;
+      }
+    }
+  } else {
+    usedFallback = true;
+  }
+
+  if (!el) {
+    // pingTimer is already running by this point (unlike before this PR,
+    // when this check ran ahead of window.open()) — clear it explicitly, or
+    // it pings the app tab every 300ms forever, since nothing else in this
+    // early-abort path would ever stop it.
+    if (pingTimer) clearInterval(pingTimer);
+    overlay.remove();
+    alert('Could not find your schedule on this page. Make sure you have your weekly schedule open (not the login page or another screen), and that it has finished loading, then try again.');
+    return;
+  }
 
   function titleOf(block) {
     var h4 = block.querySelector('h4');
@@ -310,6 +381,7 @@
   overlay.textContent = 'Sending to your timesheet app...';
 
   var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').'];
+  if (usedFallback) summaryLines.push("Couldn't auto-fetch the full date range — only grabbed what's currently on screen. Navigate to any missing week and click the button again if needed.");
   if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).');
   if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.');
   var msg = summaryLines.join('\n');
