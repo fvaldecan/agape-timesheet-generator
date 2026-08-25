@@ -147,37 +147,80 @@
     filterCellsByDateRange(container, start, end);
     return container;
   }
-  // The custom-range entry point: two typed MM/DD/YYYY prompts with a
-  // retry-until-valid loop. A calendar-picker upgrade (native
-  // <input type="date"> in the toast) is a separate future improvement —
-  // out of scope here, this just needs to work.
-  function parseMDY(raw) {
-    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((raw || '').trim());
+  // The custom-range entry point. A native <input type="date"> physically
+  // can't submit an invalid calendar date, so unlike the typed-text version
+  // this replaced, there's no "that doesn't look like a valid date" retry
+  // loop to write — the browser's own picker already rules that out.
+  function parseDateInputValue(raw) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw || '');
     if (!m) return null;
-    var mo = parseInt(m[1], 10), d = parseInt(m[2], 10), y = parseInt(m[3], 10);
-    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-    var date = dateFromYMD(y, mo, d);
-    // Reject a silently-rolled-over invalid date (e.g. Feb 30 -> Mar 2).
-    if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return null;
-    return date;
-  }
-  function promptForDate(question) {
-    while (true) {
-      var raw = window.prompt(question);
-      if (raw === null) return null;
-      var parsed = parseMDY(raw);
-      if (!parsed) { alert("That doesn't look like a valid date — use MM/DD/YYYY, e.g. 08/17/2026."); continue; }
-      return parsed;
-    }
+    return dateFromYMD(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
   }
   function promptForDateRange() {
-    var start = promptForDate('Enter the start date for your custom range (MM/DD/YYYY):');
-    if (!start) return null;
-    var end = promptForDate('Enter the end date for your custom range (MM/DD/YYYY):');
-    if (!end) return null;
-    if (end.getTime() < start.getTime()) { alert('End date needs to be on or after the start date.'); return null; }
-    if (daysBetweenUTC(start, end) + 1 > 60) { alert("That's a big range (more than 60 days) — double check the dates."); return null; }
-    return { start: start, end: end };
+    return new Promise(function (resolve) {
+      var form = document.createElement('div');
+      form.style.cssText = 'margin-top:12px !important;padding-top:12px !important;border-top:1px solid rgba(255,255,255,0.25) !important;';
+
+      var errorLine = document.createElement('div');
+      errorLine.style.cssText = 'all:unset !important;display:none !important;color:#ffb4a3 !important;font-size:12px !important;font-family:sans-serif !important;margin-bottom:6px !important;';
+      form.appendChild(errorLine);
+
+      function dateField(labelText) {
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'margin-bottom:8px !important;';
+        var label = document.createElement('label');
+        label.textContent = labelText;
+        label.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;font-size:12px !important;font-family:sans-serif !important;margin-bottom:3px !important;';
+        var input = document.createElement('input');
+        input.type = 'date';
+        input.style.cssText = 'font-family:sans-serif !important;font-size:13px !important;padding:5px 7px !important;border-radius:4px !important;border:none !important;width:150px !important;box-sizing:border-box !important;';
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+        form.appendChild(wrap);
+        return input;
+      }
+      var startInput = dateField('Start date');
+      var endInput = dateField('End date');
+
+      var btnRow = document.createElement('div');
+      btnRow.style.cssText = 'margin-top:4px !important;';
+      var fetchBtn = document.createElement('button');
+      fetchBtn.textContent = 'Get schedule';
+      fetchBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:#fff !important;color:#1c2321 !important;border:none !important;padding:7px 12px !important;border-radius:4px !important;cursor:pointer !important;font-weight:600 !important;font-size:13px !important;font-family:sans-serif !important;margin-right:8px !important;';
+      var cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Never mind';
+      cancelBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:none !important;color:#fff !important;opacity:0.75 !important;border:1px solid rgba(255,255,255,0.4) !important;padding:6px 12px !important;border-radius:4px !important;cursor:pointer !important;font-size:13px !important;font-family:sans-serif !important;';
+      btnRow.appendChild(fetchBtn);
+      btnRow.appendChild(cancelBtn);
+      form.appendChild(btnRow);
+
+      function showError(text) {
+        errorLine.textContent = text;
+        errorLine.style.display = 'block';
+      }
+
+      var settled = false;
+      function finish(value) {
+        if (settled) return;
+        settled = true;
+        form.remove();
+        resolve(value);
+      }
+
+      fetchBtn.onclick = function () {
+        var start = parseDateInputValue(startInput.value);
+        var end = parseDateInputValue(endInput.value);
+        if (!start || !end) { showError('Pick both a start and end date.'); return; }
+        if (end.getTime() < start.getTime()) { showError('End date needs to be on or after the start date.'); return; }
+        if (daysBetweenUTC(start, end) + 1 > 60) { showError("That's a big range (more than 60 days) — double check the dates."); return; }
+        finish({ start: start, end: end });
+      };
+      cancelBtn.onclick = function () { finish(null); };
+
+      overlay.textContent = 'Enter a custom date range:';
+      overlay.appendChild(form);
+      try { startInput.focus(); } catch (e) {}
+    });
   }
 
   // Open (or refocus) the app tab synchronously, in the same click gesture
@@ -265,7 +308,7 @@
       formatDateMDY(currentPeriod.start) + ' - ' + formatDateMDY(currentPeriod.end) +
       '\n\nOK = yes, fetch that period now.\nCancel = no, I\'ll enter a different date range instead (e.g. to catch up a missed period).'
     );
-    var requestedRange = wantsCurrentPeriod ? currentPeriod : promptForDateRange();
+    var requestedRange = wantsCurrentPeriod ? currentPeriod : await promptForDateRange();
     if (requestedRange) {
       var fetched = null;
       try { fetched = await fetchScheduleRange(userId, requestedRange.start, requestedRange.end); } catch (e) { fetched = null; }
