@@ -126,8 +126,11 @@ $40/hr on programmed groups, drills, classes"
     <div id="parseStatus" class="row status-text" role="status" aria-live="polite"></div>
   </section>
 
-  <div id="handoffLoadingBanner" class="info-banner hidden" role="status" aria-live="polite">
-    &#9203; Waiting for your schedule from Club Automation — keep that tab open...
+  <div id="handoffLoadingOverlay" class="fullscreen-overlay hidden" role="status" aria-live="polite">
+    <div class="fullscreen-overlay-card">
+      <div id="handoffLoadingMessage">&#9203; Waiting for your schedule from Club Automation — keep that tab open...</div>
+      <button id="handoffLoadingDismiss" class="btn secondary mt-12 hidden" onclick="dismissHandoffLoadingOverlay()">Dismiss and paste manually</button>
+    </div>
   </div>
 
   <section id="resultsSection">
@@ -197,25 +200,52 @@ document.getElementById('compNotes').value = state.compNotes || '';
 // Automation weeks doesn't change which tab it is), so checking `e.source`
 // against it is both simpler and stricter than an origin string ever
 // could be here.
+// Blocks the whole page (not just a banner) while waiting for the hand-off
+// -- a coach landing on this tab mid-wait shouldn't be able to click into
+// Settings or anywhere else until the schedule actually arrives. If it
+// never does (the Club Automation side failed, or that tab got closed),
+// nothing would otherwise tell this tab to stop waiting, so a timer arms on
+// the first ping and surfaces a manual way out after a while rather than
+// leaving the coach stuck behind an overlay they can't dismiss.
+let handoffTimeoutTimer = null;
+function showHandoffLoadingOverlay() {
+  const overlay = document.getElementById('handoffLoadingOverlay');
+  if (overlay) overlay.classList.remove('hidden');
+  // Pings repeat every 300ms while waiting -- only the first one should arm
+  // the timeout, or restarting a 20s timer on every single ping would mean
+  // it never actually elapses.
+  if (handoffTimeoutTimer !== null) return;
+  handoffTimeoutTimer = setTimeout(function () {
+    const message = document.getElementById('handoffLoadingMessage');
+    const dismissBtn = document.getElementById('handoffLoadingDismiss');
+    if (message) message.textContent = 'Still waiting on Club Automation — this can take a while for a big schedule, or something may have gone wrong.';
+    if (dismissBtn) dismissBtn.classList.remove('hidden');
+  }, 20000);
+}
+function hideHandoffLoadingOverlay() {
+  const overlay = document.getElementById('handoffLoadingOverlay');
+  if (overlay) overlay.classList.add('hidden');
+  if (handoffTimeoutTimer !== null) { clearTimeout(handoffTimeoutTimer); handoffTimeoutTimer = null; }
+  // Reset back to the default state for the next hand-off attempt.
+  const message = document.getElementById('handoffLoadingMessage');
+  const dismissBtn = document.getElementById('handoffLoadingDismiss');
+  if (message) message.textContent = '⏳ Waiting for your schedule from Club Automation — keep that tab open...';
+  if (dismissBtn) dismissBtn.classList.add('hidden');
+}
+function dismissHandoffLoadingOverlay() {
+  hideHandoffLoadingOverlay();
+}
+
 window.addEventListener('message', function (e) {
   if (!window.opener || e.source !== window.opener) return;
   if (!e.data || typeof e.data.type !== 'string') return;
   if (e.data.type === 'AGAPE_PING') {
-    // A hand-off is incoming, but there's nothing to show yet — the scrape
-    // on the Club Automation side can take several more seconds, and (per
-    // c4c6806 in this repo's history) Chrome won't let a backgrounded tab
-    // reclaim focus, so a coach can easily land on this tab mid-wait. Surface
-    // that now rather than leaving the page looking idle. Un-hiding on every
-    // ping (not just the first) is harmless — classList.remove() on an
-    // already-visible element is a no-op.
-    const loadingBanner = document.getElementById('handoffLoadingBanner');
-    if (loadingBanner) loadingBanner.classList.remove('hidden');
+    showHandoffLoadingOverlay();
     e.source.postMessage({ type: 'AGAPE_READY' }, e.origin);
   } else if (e.data.type === 'AGAPE_SCHEDULE_DATA' && typeof e.data.html === 'string') {
     document.getElementById('htmlInput').value = e.data.html;
     runParse();
-    const loadingBanner = document.getElementById('handoffLoadingBanner');
-    if (loadingBanner) loadingBanner.classList.add('hidden');
+    hideHandoffLoadingOverlay();
     e.source.postMessage({ type: 'AGAPE_RECEIVED' }, e.origin);
   }
 });
