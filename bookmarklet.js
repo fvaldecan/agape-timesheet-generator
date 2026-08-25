@@ -222,6 +222,49 @@
       try { startInput.focus(); } catch (e) {}
     });
   }
+  // Replaces a native confirm() dialog (whose OK/Cancel carry no visible
+  // label and were overloaded with two different meanings via copy alone)
+  // with an explicit two-button choice, same overlay/button conventions as
+  // promptForDateRange() above. Resolves straight to a {start, end} range or
+  // null -- composing promptForDateRange() for the custom-range path -- so
+  // the call site's contract doesn't change at all, just how it's produced.
+  function promptForPeriodChoice(currentPeriod) {
+    return new Promise(function (resolve) {
+      var body = document.createElement('div');
+      body.style.cssText = 'margin-top:10px !important;';
+
+      var rangeLine = document.createElement('div');
+      rangeLine.textContent = formatDateMDY(currentPeriod.start) + ' - ' + formatDateMDY(currentPeriod.end);
+      rangeLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:0.85 !important;font-size:13px !important;font-family:sans-serif !important;margin-bottom:10px !important;';
+      body.appendChild(rangeLine);
+
+      var btnRow = document.createElement('div');
+      btnRow.style.cssText = 'margin-top:4px !important;';
+      var currentBtn = document.createElement('button');
+      currentBtn.textContent = 'Get current pay period';
+      currentBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:#fff !important;color:#1c2321 !important;border:none !important;padding:7px 12px !important;border-radius:4px !important;cursor:pointer !important;font-weight:600 !important;font-size:13px !important;font-family:sans-serif !important;margin-right:8px !important;';
+      var customBtn = document.createElement('button');
+      customBtn.textContent = 'Enter custom range';
+      customBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:none !important;color:#fff !important;opacity:0.75 !important;border:1px solid rgba(255,255,255,0.4) !important;padding:6px 12px !important;border-radius:4px !important;cursor:pointer !important;font-size:13px !important;font-family:sans-serif !important;';
+      btnRow.appendChild(currentBtn);
+      btnRow.appendChild(customBtn);
+      body.appendChild(btnRow);
+
+      var settled = false;
+      function finish(value) {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      }
+
+      currentBtn.onclick = function () { body.remove(); finish(currentPeriod); };
+      customBtn.onclick = function () { body.remove(); promptForDateRange().then(finish); };
+
+      overlay.textContent = 'Get your current pay period automatically?';
+      overlay.appendChild(body);
+      try { currentBtn.focus(); } catch (e) {}
+    });
+  }
 
   // Open (or refocus) the app tab synchronously, in the same click gesture
   // that ran this bookmarklet — waiting until after the async scraping
@@ -303,13 +346,15 @@
   var userId = getUserId();
   if (userId) {
     var currentPeriod = currentPeriodRange(todayAsDateOnly());
-    var wantsCurrentPeriod = confirm(
-      'Get your current pay period automatically?\n\n' +
-      formatDateMDY(currentPeriod.start) + ' - ' + formatDateMDY(currentPeriod.end) +
-      '\n\nOK = yes, fetch that period now.\nCancel = no, I\'ll enter a different date range instead (e.g. to catch up a missed period).'
-    );
-    var requestedRange = wantsCurrentPeriod ? currentPeriod : await promptForDateRange();
+    var requestedRange = await promptForPeriodChoice(currentPeriod);
     if (requestedRange) {
+      // Under the old confirm(), the native dialog never touched overlay's
+      // DOM, so choosing "yes" left its prior text alone. Now the choice UI
+      // (and promptForDateRange()'s form) both write into overlay directly,
+      // so without this reset either one's text would stay stuck on screen
+      // through the fetch -- the scrape loop below only updates
+      // overlay.textContent once it reaches a real (non-blocked) booking.
+      overlay.textContent = 'Getting your schedule... please stay on this page.';
       var fetched = null;
       try { fetched = await fetchScheduleRange(userId, requestedRange.start, requestedRange.end); } catch (e) { fetched = null; }
       if (fetched) {
