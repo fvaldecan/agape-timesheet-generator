@@ -217,8 +217,8 @@
       };
       cancelBtn.onclick = function () { finish(null); };
 
-      overlay.textContent = 'Enter a custom date range:';
-      overlay.appendChild(form);
+      content.textContent = 'Enter a custom date range:';
+      content.appendChild(form);
       try { startInput.focus(); } catch (e) {}
     });
   }
@@ -260,8 +260,8 @@
       currentBtn.onclick = function () { body.remove(); finish(currentPeriod); };
       customBtn.onclick = function () { body.remove(); promptForDateRange().then(finish); };
 
-      overlay.textContent = 'Get your current pay period automatically?';
-      overlay.appendChild(body);
+      content.textContent = 'Get your current pay period automatically?';
+      content.appendChild(body);
       try { currentBtn.focus(); } catch (e) {}
     });
   }
@@ -321,11 +321,43 @@
     });
   }
 
+  // A previous run's toast (e.g. one that hit the clipboard-fallback state
+  // and was never dismissed) could still be sitting on the page -- remove
+  // it before creating a new one, so two never stack.
+  var prevOverlay = document.querySelector('[data-agape-overlay]');
+  if (prevOverlay) prevOverlay.remove();
+
   var overlay = document.createElement('div');
+  overlay.setAttribute('data-agape-overlay', '1');
   overlay.style.cssText = 'all:initial;position:fixed !important;top:16px !important;right:16px !important;z-index:2147483647 !important;background:#1c2321 !important;color:#fff !important;opacity:1 !important;filter:none !important;padding:16px 20px !important;border-radius:6px !important;font-family:sans-serif !important;font-size:14px !important;line-height:1.5 !important;box-shadow:0 4px 16px rgba(0,0,0,0.3) !important;max-width:320px !important;display:block !important;';
-  overlay.textContent = 'Getting your schedule... please stay on this page.';
   overlay.setAttribute('role', 'status');
   overlay.setAttribute('aria-live', 'polite');
+
+  // Always present, not just in the fallback state. Clears pingTimer before
+  // removing the overlay -- without this, dismissing mid-flow (before appWin
+  // is ever contacted successfully) would leave it pinging the app tab every
+  // 300ms forever, with nothing left on screen to show for it.
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = String.fromCharCode(215); // ×
+  closeBtn.setAttribute('aria-label', 'Dismiss');
+  closeBtn.style.cssText = 'all:unset !important;position:absolute !important;top:6px !important;right:8px !important;cursor:pointer !important;color:#fff !important;opacity:0.6 !important;font-size:16px !important;line-height:1 !important;font-family:sans-serif !important;padding:4px 6px !important;';
+  closeBtn.onclick = function () {
+    if (pingTimer) clearInterval(pingTimer);
+    overlay.remove();
+  };
+  overlay.appendChild(closeBtn);
+
+  // Everything below targets `content`, never `overlay` itself, so a status
+  // update (an overlay.textContent-style assignment) never wipes out the
+  // close button sitting alongside it. `content` needs its own explicit
+  // color/font here -- `overlay`'s `all:initial` reset doesn't cascade to
+  // children the way inherited styles normally would, since `content` needs
+  // that same reset applied to itself for the same host-page CSS isolation.
+  var content = document.createElement('div');
+  content.style.cssText = 'all:initial !important;display:block !important;color:#fff !important;font-family:sans-serif !important;font-size:14px !important;line-height:1.5 !important;padding-right:14px !important;';
+  content.textContent = 'Getting your schedule... please stay on this page.';
+  overlay.appendChild(content);
+
   // Attached to <html>, not <body> — some sites (including Club Automation)
   // dim document.body while an AJAX request is in flight, and CSS opacity
   // compounds through ancestors with no way for a child to opt back out.
@@ -348,13 +380,13 @@
     var currentPeriod = currentPeriodRange(todayAsDateOnly());
     var requestedRange = await promptForPeriodChoice(currentPeriod);
     if (requestedRange) {
-      // Under the old confirm(), the native dialog never touched overlay's
+      // Under the old confirm(), the native dialog never touched content's
       // DOM, so choosing "yes" left its prior text alone. Now the choice UI
-      // (and promptForDateRange()'s form) both write into overlay directly,
+      // (and promptForDateRange()'s form) both write into content directly,
       // so without this reset either one's text would stay stuck on screen
       // through the fetch -- the scrape loop below only updates
-      // overlay.textContent once it reaches a real (non-blocked) booking.
-      overlay.textContent = 'Getting your schedule... please stay on this page.';
+      // content.textContent once it reaches a real (non-blocked) booking.
+      content.textContent = 'Getting your schedule... please stay on this page.';
       var fetched = null;
       try { fetched = await fetchScheduleRange(userId, requestedRange.start, requestedRange.end); } catch (e) { fetched = null; }
       if (fetched) {
@@ -424,7 +456,7 @@
     if (isEmptySlot) { emptyCount++; continue; }
     realCount++;
 
-    overlay.textContent = 'Getting your schedule... ' + (i + 1) + ' of ' + liveBlocks.length + '. Please stay on this page.';
+    content.textContent = 'Getting your schedule... ' + (i + 1) + ' of ' + liveBlocks.length + '. Please stay on this page.';
 
     var cls = liveBlocks[i].className;
     var schedMatch = cls.match(/schedule-(\d+)/);
@@ -466,7 +498,7 @@
   // The scrape loop above is done — swap the overlay's stale "N of M"
   // progress text for what's actually happening next, so it doesn't look
   // stuck during the hand-off (usually quick, but not instant).
-  overlay.textContent = 'Sending to your timesheet app...';
+  content.textContent = 'Sending to your timesheet app...';
 
   var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').'];
   if (usedFallback) summaryLines.push("Couldn't auto-fetch the full date range — only grabbed what's currently on screen. Navigate to any missing week and click the button again if needed.");
@@ -509,17 +541,17 @@
   var delivered = appWin ? await waitForAck() : false;
 
   if (delivered) {
-    overlay.innerHTML = '';
+    content.innerHTML = '';
     summaryLines.forEach(function (line, idx) {
       var lineDiv = document.createElement('div');
       lineDiv.textContent = line;
       lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:' + (idx > 0 ? '0.85' : '1') + ' !important;font-size:' + (idx > 0 ? '13px' : '14px') + ' !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:' + (idx > 0 ? '6px' : '0') + ' !important;';
-      overlay.appendChild(lineDiv);
+      content.appendChild(lineDiv);
     });
     var doneLine = document.createElement('div');
     doneLine.textContent = 'Sent to the timesheet app — check that tab.';
     doneLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;font-weight:600 !important;';
-    overlay.appendChild(doneLine);
+    content.appendChild(doneLine);
     setTimeout(function () { overlay.remove(); }, 3000);
     return;
   }
@@ -538,21 +570,21 @@
     }
   }
 
-  overlay.innerHTML = '';
+  content.innerHTML = '';
   var whyLine = document.createElement('div');
   whyLine.textContent = "Couldn't reach the timesheet app tab automatically.";
   whyLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;';
-  overlay.appendChild(whyLine);
+  content.appendChild(whyLine);
   summaryLines.forEach(function (line) {
     var lineDiv = document.createElement('div');
     lineDiv.textContent = line;
     lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:0.85 !important;font-size:13px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:6px !important;';
-    overlay.appendChild(lineDiv);
+    content.appendChild(lineDiv);
   });
   var hint = document.createElement('div');
   hint.textContent = 'Click below to copy it, then paste into the app tab.';
   hint.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;margin-bottom:10px !important;';
-  overlay.appendChild(hint);
+  content.appendChild(hint);
   var copyBtn = document.createElement('button');
   copyBtn.textContent = 'Copy schedule';
   copyBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:#fff !important;color:#1c2321 !important;opacity:1 !important;border:none !important;padding:8px 14px !important;border-radius:4px !important;cursor:pointer !important;font-weight:600 !important;font-size:14px !important;font-family:sans-serif !important;';
@@ -567,6 +599,6 @@
       onCopyDone(copyFallback(htmlOut));
     }
   };
-  overlay.appendChild(copyBtn);
+  content.appendChild(copyBtn);
   copyBtn.focus();
 })();
