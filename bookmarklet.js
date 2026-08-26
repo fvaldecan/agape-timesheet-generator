@@ -541,6 +541,16 @@
   var delivered = appWin ? await waitForAck() : false;
 
   if (delivered) {
+    // Nothing else ever explicitly brings the app tab forward -- a fresh
+    // tab likely gets focus as a side effect of being navigated at open
+    // time, but a reused tab (the common case for a second week in the
+    // same pay period) only ever got a bare reference via window.open('',
+    // name), with no guaranteed focus. This is a different case from the
+    // one Chrome blocks (a backgrounded tab reclaiming focus for itself,
+    // confirmed a no-op in this repo's history) -- this is the CA-tab
+    // script directing focus to a window it holds a legitimate handle to,
+    // right when there's something real for the coach to look at.
+    try { appWin.focus(); } catch (e) {}
     content.innerHTML = '';
     summaryLines.forEach(function (line, idx) {
       var lineDiv = document.createElement('div');
