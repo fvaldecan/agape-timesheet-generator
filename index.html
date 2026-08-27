@@ -245,6 +245,12 @@ window.addEventListener('message', function (e) {
   } else if (e.data.type === 'AGAPE_SCHEDULE_DATA' && typeof e.data.html === 'string') {
     document.getElementById('htmlInput').value = e.data.html;
     runParse();
+    // Auto-fetch already replaces the coach's copy/paste step; requiring a
+    // second manual "Add to sheet" click on top of that would just be a
+    // click for the sake of a click. confirmAdd() is a safe no-op if
+    // runParse() didn't produce anything to add (blocked rates, no events,
+    // parse error) — pendingShifts stays null either way.
+    confirmAdd();
     hideHandoffLoadingOverlay();
     e.source.postMessage({ type: 'AGAPE_RECEIVED' }, e.origin);
   }
