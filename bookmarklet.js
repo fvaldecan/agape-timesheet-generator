@@ -266,50 +266,64 @@
     });
   }
 
-  // Open (or refocus) the app tab synchronously, in the same click gesture
-  // that ran this bookmarklet — waiting until after the async scraping
-  // below would get it treated as a blocked popup in some browsers, the
-  // same gesture-staleness problem noted below for the clipboard copy.
+  // The app tab doesn't open until the coach clicks "Send to timesheet
+  // app" below, once scraping is done — see openAppTab()/startPinging()
+  // for why and what replaces the old up-front window.open().
+  var appWin = null;
+  var appReady = false;
+  var pingTimer = null;
+  var onScheduleReceived = null;
+
+  // Opens (or refocuses) the app tab. Only ever called from the "Send to
+  // timesheet app" button's click handler, further down — that's still a
+  // real, fresh user gesture, so window.open() still isn't treated as a
+  // blocked popup, it's just a *different* click than the one that started
+  // this whole run (the same "a fresh click gives a fresh gesture" idiom
+  // the clipboard-copy fallback below already relies on). Deferring this
+  // past the click that ran the bookmarklet is what keeps the coach on
+  // Club Automation for the entire scrape instead of getting switched away
+  // immediately.
   // A named target reuses the same tab across weeks. Passing an EMPTY url
   // (not APP_URL) is what makes reuse safe: if a window with this name
   // already exists, this call refocuses it WITHOUT navigating it — a real
   // navigation would reload the app tab and wipe out any weeks already
   // added to that in-progress sheet (nothing about the built sheet
   // persists across a reload, only Settings do).
-  var appWin = null;
-  try { appWin = window.open('', 'agapeTimesheetApp'); } catch (e) { appWin = null; }
-  if (appWin) {
-    var isFreshTab;
-    try {
-      // Reading .location.href succeeds and returns 'about:blank' only for
-      // a brand-new same-origin window; it throws for a window already
-      // navigated to the app (now cross-origin from clubautomation.com).
-      // Writing/navigating .location cross-origin is always allowed —
-      // only *reading* it is restricted — so this asymmetry is what lets
-      // fresh-vs-reused be told apart without ever needing real access to
-      // the app tab's contents.
-      isFreshTab = (appWin.location.href === 'about:blank' || appWin.location.href === '');
-    } catch (e) { isFreshTab = false; }
-    if (isFreshTab) {
-      try { appWin.location.href = APP_URL; } catch (e) { appWin = null; }
+  function openAppTab() {
+    try { appWin = window.open('', 'agapeTimesheetApp'); } catch (e) { appWin = null; }
+    if (appWin) {
+      var isFreshTab;
+      try {
+        // Reading .location.href succeeds and returns 'about:blank' only for
+        // a brand-new same-origin window; it throws for a window already
+        // navigated to the app (now cross-origin from clubautomation.com).
+        // Writing/navigating .location cross-origin is always allowed —
+        // only *reading* it is restricted — so this asymmetry is what lets
+        // fresh-vs-reused be told apart without ever needing real access to
+        // the app tab's contents.
+        isFreshTab = (appWin.location.href === 'about:blank' || appWin.location.href === '');
+      } catch (e) { isFreshTab = false; }
+      if (isFreshTab) {
+        try { appWin.location.href = APP_URL; } catch (e) { appWin = null; }
+      }
     }
   }
 
-  // Start pinging the app tab now, in parallel with the scrape loop below
-  // — not after it finishes — so the app tab gets the whole scrape
-  // duration (often several seconds) to finish loading its own JS and
-  // register its listener, instead of a cold start eating into the later
-  // send-timeout. Purely reactive on the app's side (see index.html): it
-  // replies AGAPE_READY to any ping, whether it just finished loading or
-  // has been sitting open since a previous week.
+  // Starts pinging the app tab right after openAppTab() opens it, so it
+  // gets as much time as possible to finish loading its own JS and
+  // register its listener before waitForAck() below times out. Used to
+  // start in parallel with the scrape loop instead (before this tab-switch
+  // was deferred) — now there's no scrape left to run in parallel with, so
+  // the app tab just gets a plain cold start once the coach clicks Send.
+  // Purely reactive on the app's side (see index.html): it replies
+  // AGAPE_READY to any ping, whether it just finished loading or has been
+  // sitting open since a previous week.
   //
   // One listener handles both message types for the whole run: AGAPE_READY
   // just flips a flag, AGAPE_RECEIVED calls whatever waitForAck() below has
   // currently registered as onScheduleReceived (null until it's waiting).
-  var appReady = false;
-  var pingTimer = null;
-  var onScheduleReceived = null;
-  if (appWin) {
+  function startPinging() {
+    if (!appWin) return;
     pingTimer = setInterval(function () {
       if (appReady) { clearInterval(pingTimer); return; }
       try { appWin.postMessage({ type: 'AGAPE_PING' }, APP_ORIGIN); } catch (e) {}
@@ -400,11 +414,9 @@
   }
 
   if (!el) {
-    // pingTimer is already running by this point (unlike before this PR,
-    // when this check ran ahead of window.open()) — clear it explicitly, or
-    // it pings the app tab every 300ms forever, since nothing else in this
-    // early-abort path would ever stop it.
-    if (pingTimer) clearInterval(pingTimer);
+    // No app tab or ping timer exists yet at this point — openAppTab()/
+    // startPinging() don't run until the coach clicks "Send to timesheet
+    // app", well after this check — so there's nothing to clean up here.
     overlay.remove();
     alert('Could not find your schedule on this page. Make sure you have your weekly schedule open (not the login page or another screen), and that it has finished loading, then try again.');
     return;
@@ -495,11 +507,6 @@
 
   var htmlOut = clone.outerHTML;
 
-  // The scrape loop above is done — swap the overlay's stale "N of M"
-  // progress text for what's actually happening next, so it doesn't look
-  // stuck during the hand-off (usually quick, but not instant).
-  content.textContent = 'Sending to your timesheet app...';
-
   var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').'];
   if (usedFallback) summaryLines.push("Couldn't auto-fetch the full date range — only grabbed what's currently on screen. Navigate to any missing week and click the button again if needed.");
   if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).');
@@ -507,7 +514,7 @@
   var msg = summaryLines.join('\n');
 
   // Hand the scrape off to the app tab: send once the app has confirmed
-  // it's listening (AGAPE_READY) AND the scrape above has finished,
+  // it's listening (AGAPE_READY) AND openAppTab()/startPinging() have run,
   // whichever happens last. An 8s watchdog covers both "the app never
   // became ready" and "it became ready but never acknowledged receipt" —
   // on timeout (or if window.open never got a tab at all), delivered stays
@@ -538,39 +545,12 @@
       })();
     });
   }
-  var delivered = appWin ? await waitForAck() : false;
-
-  if (delivered) {
-    // Nothing else ever explicitly brings the app tab forward -- a fresh
-    // tab likely gets focus as a side effect of being navigated at open
-    // time, but a reused tab (the common case for a second week in the
-    // same pay period) only ever got a bare reference via window.open('',
-    // name), with no guaranteed focus. This is a different case from the
-    // one Chrome blocks (a backgrounded tab reclaiming focus for itself,
-    // confirmed a no-op in this repo's history) -- this is the CA-tab
-    // script directing focus to a window it holds a legitimate handle to,
-    // right when there's something real for the coach to look at.
-    try { appWin.focus(); } catch (e) {}
-    content.innerHTML = '';
-    summaryLines.forEach(function (line, idx) {
-      var lineDiv = document.createElement('div');
-      lineDiv.textContent = line;
-      lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:' + (idx > 0 ? '0.85' : '1') + ' !important;font-size:' + (idx > 0 ? '13px' : '14px') + ' !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:' + (idx > 0 ? '6px' : '0') + ' !important;';
-      content.appendChild(lineDiv);
-    });
-    var doneLine = document.createElement('div');
-    doneLine.textContent = 'Sent to the timesheet app — check that tab.';
-    doneLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;font-weight:600 !important;';
-    content.appendChild(doneLine);
-    setTimeout(function () { overlay.remove(); }, 3000);
-    return;
-  }
 
   // Fallback: copying happens on a click of the button below, not
-  // automatically here — by the time the scraping loop (and the failed
-  // hand-off attempt) above finishes, the user's original click gesture
-  // has gone stale in Safari and both the Clipboard API and the
-  // execCommand fallback silently fail. A fresh click gives a fresh gesture.
+  // automatically here — by the time a failed hand-off attempt gets here,
+  // the gesture from whatever click triggered it has gone stale in Safari
+  // and both the Clipboard API and the execCommand fallback silently fail.
+  // A fresh click gives a fresh gesture.
   function onCopyDone(success) {
     overlay.remove();
     if (success) {
@@ -580,35 +560,105 @@
     }
   }
 
+  function showCopyFallback() {
+    // openAppTab()/startPinging() ran and didn't pan out — stop pinging, or
+    // it keeps hitting a tab nothing's waiting on every 300ms indefinitely.
+    if (pingTimer) clearInterval(pingTimer);
+    content.innerHTML = '';
+    var whyLine = document.createElement('div');
+    whyLine.textContent = "Couldn't reach the timesheet app tab automatically.";
+    whyLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;';
+    content.appendChild(whyLine);
+    summaryLines.forEach(function (line) {
+      var lineDiv = document.createElement('div');
+      lineDiv.textContent = line;
+      lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:0.85 !important;font-size:13px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:6px !important;';
+      content.appendChild(lineDiv);
+    });
+    var hint = document.createElement('div');
+    hint.textContent = 'Click below to copy it, then paste into the app tab.';
+    hint.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;margin-bottom:10px !important;';
+    content.appendChild(hint);
+    var copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy schedule';
+    copyBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:#fff !important;color:#1c2321 !important;opacity:1 !important;border:none !important;padding:8px 14px !important;border-radius:4px !important;cursor:pointer !important;font-weight:600 !important;font-size:14px !important;font-family:sans-serif !important;';
+    copyBtn.onclick = function () {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(htmlOut).then(function () {
+          onCopyDone(true);
+        }, function () {
+          onCopyDone(copyFallback(htmlOut));
+        });
+      } else {
+        onCopyDone(copyFallback(htmlOut));
+      }
+    };
+    content.appendChild(copyBtn);
+    copyBtn.focus();
+  }
+
+  // Scraping is done. This is the point where the coach chooses to move on
+  // — clicking this button is a fresh user gesture, so openAppTab() below
+  // can still call window.open() without it being treated as a blocked
+  // popup, even though it's well after the click that started this run.
+  // Staying on Club Automation up to exactly this point (instead of
+  // switching away back when the bookmarklet was first clicked) is the
+  // whole point of this redesign.
   content.innerHTML = '';
-  var whyLine = document.createElement('div');
-  whyLine.textContent = "Couldn't reach the timesheet app tab automatically.";
-  whyLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;';
-  content.appendChild(whyLine);
+  var readyLine = document.createElement('div');
+  readyLine.textContent = 'Your schedule is ready.';
+  readyLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;font-weight:600 !important;';
+  content.appendChild(readyLine);
   summaryLines.forEach(function (line) {
     var lineDiv = document.createElement('div');
     lineDiv.textContent = line;
     lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:0.85 !important;font-size:13px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:6px !important;';
     content.appendChild(lineDiv);
   });
-  var hint = document.createElement('div');
-  hint.textContent = 'Click below to copy it, then paste into the app tab.';
-  hint.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;margin-bottom:10px !important;';
-  content.appendChild(hint);
-  var copyBtn = document.createElement('button');
-  copyBtn.textContent = 'Copy schedule';
-  copyBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:#fff !important;color:#1c2321 !important;opacity:1 !important;border:none !important;padding:8px 14px !important;border-radius:4px !important;cursor:pointer !important;font-weight:600 !important;font-size:14px !important;font-family:sans-serif !important;';
-  copyBtn.onclick = function () {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(htmlOut).then(function () {
-        onCopyDone(true);
-      }, function () {
-        onCopyDone(copyFallback(htmlOut));
+  var sendHint = document.createElement('div');
+  sendHint.textContent = 'Click below to send it to your timesheet app.';
+  sendHint.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;margin-bottom:10px !important;';
+  content.appendChild(sendHint);
+  var sendBtn = document.createElement('button');
+  sendBtn.textContent = 'Send to timesheet app';
+  sendBtn.style.cssText = 'all:unset !important;display:inline-block !important;background:#fff !important;color:#1c2321 !important;opacity:1 !important;border:none !important;padding:8px 14px !important;border-radius:4px !important;cursor:pointer !important;font-weight:600 !important;font-size:14px !important;font-family:sans-serif !important;';
+  sendBtn.onclick = async function () {
+    sendBtn.disabled = true;
+    openAppTab();
+    startPinging();
+    content.innerHTML = '';
+    content.textContent = 'Sending to your timesheet app...';
+
+    var delivered = appWin ? await waitForAck() : false;
+
+    if (delivered) {
+      // Nothing else ever explicitly brings the app tab forward -- a fresh
+      // tab likely gets focus as a side effect of being navigated at open
+      // time, but a reused tab (the common case for a second week in the
+      // same pay period) only ever got a bare reference via window.open('',
+      // name), with no guaranteed focus. This is a different case from the
+      // one Chrome blocks (a backgrounded tab reclaiming focus for itself,
+      // confirmed a no-op in this repo's history) -- this is the CA-tab
+      // script directing focus to a window it holds a legitimate handle to,
+      // right when there's something real for the coach to look at.
+      try { appWin.focus(); } catch (e) {}
+      content.innerHTML = '';
+      summaryLines.forEach(function (line, idx) {
+        var lineDiv = document.createElement('div');
+        lineDiv.textContent = line;
+        lineDiv.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:' + (idx > 0 ? '0.85' : '1') + ' !important;font-size:' + (idx > 0 ? '13px' : '14px') + ' !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:' + (idx > 0 ? '6px' : '0') + ' !important;';
+        content.appendChild(lineDiv);
       });
-    } else {
-      onCopyDone(copyFallback(htmlOut));
+      var doneLine = document.createElement('div');
+      doneLine.textContent = 'Sent to the timesheet app — check that tab.';
+      doneLine.style.cssText = 'all:unset !important;display:block !important;color:#fff !important;opacity:1 !important;font-size:14px !important;font-family:sans-serif !important;line-height:1.5 !important;margin-top:10px !important;font-weight:600 !important;';
+      content.appendChild(doneLine);
+      setTimeout(function () { overlay.remove(); }, 3000);
+      return;
     }
+
+    showCopyFallback();
   };
-  content.appendChild(copyBtn);
-  copyBtn.focus();
+  content.appendChild(sendBtn);
+  sendBtn.focus();
 })();
