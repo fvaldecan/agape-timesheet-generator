@@ -566,6 +566,7 @@ function rateRuleMissingFields(r) {
 }
 function validateRates() {
   const problems = [];
+  if (!document.getElementById('coachName').value.trim()) problems.push('Enter your name.');
   state.coreRates.forEach(r => {
     if (rateRuleMissingFields(r).length) problems.push(`"${r.match}" rate: missing hourly rate.`);
   });
@@ -597,10 +598,10 @@ function refreshRateStatusOnEdit() {
     if (!el || el.dataset.rateError !== '1') return;
     const rateProblems = validateRates();
     if (rateProblems.length) {
-      el.innerHTML = `<strong>Fix your pay rates before ${verb}:</strong><br>` + rateProblems.map(escapeHtml).join('<br>');
+      el.innerHTML = `<strong>Fix the following before ${verb}:</strong><br>` + rateProblems.map(escapeHtml).join('<br>');
       el.className = 'status-warn';
     } else {
-      el.textContent = 'Pay rates look good now.';
+      el.textContent = 'Everything looks good now.';
       el.className = 'status-ok';
       el.dataset.rateError = '';
     }
@@ -647,7 +648,7 @@ function reapplyRatesToSheet() {
   updateTimesheetStatus.dataset.rateError = '';
   const rateProblems = validateRates();
   if (rateProblems.length) {
-    updateTimesheetStatus.innerHTML = '<strong>Fix your pay rates before updating:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+    updateTimesheetStatus.innerHTML = '<strong>Fix the following before updating:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
     updateTimesheetStatus.className = 'status-warn';
     updateTimesheetStatus.dataset.rateError = '1';
     return;
@@ -1197,7 +1198,7 @@ function runParse() {
   // rate can't quietly ship on a real commission sheet.
   const rateProblems = validateRates();
   if (rateProblems.length) {
-    status.innerHTML = '<strong>Fix your pay rates before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
+    status.innerHTML = '<strong>Fix the following before parsing:</strong><br>' + rateProblems.map(escapeHtml).join('<br>');
     status.className = 'status-warn';
     status.dataset.rateError = '1';
     return;
