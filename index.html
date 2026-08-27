@@ -162,10 +162,42 @@ $40/hr on programmed groups, drills, classes"
 // pricing mode) are still filled in as a starting template; each coach fills
 // in their own $ amounts in Settings on first use, and the app's own
 // "missing field" highlighting guides them to do it.
-const DEFAULT_RATES = [
+//
+// PL/GL/PHS are every coach's standard categories, not something each coach
+// invents their own match text for -- they live in their own fixed list
+// (state.coreRates), separate from the custom/draggable state.rates list,
+// so the custom-row editor's drag-reorder/remove logic never has to reason
+// about which array indices are "core" vs "custom" in a shared array.
+const CORE_RATE_DEFAULTS = [
   { match: "PL", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
+  { match: "GL", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
+  { match: "PHS", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
+];
+const DEFAULT_RATES = [
   { match: "group class", matchMode: "contains", type: "per_person", coachShare: 50 },
 ];
+
+// One-time migration for a coach who already has a custom "PL" (or GL/PHS)
+// row: without this, they'd end up with two -- their old one (with a real
+// $ rate) and a new blank-$ core one -- and since core rows are checked
+// first in classifyRate(), the blank one would silently win, zeroing out
+// an already-configured rate.
+function migrateCoreRates(customRates) {
+  const remainingCustom = customRates.slice();
+  const coreRates = CORE_RATE_DEFAULTS.map(coreDefault => {
+    const idx = remainingCustom.findIndex(r => r.match === coreDefault.match && r.matchMode === coreDefault.matchMode);
+    if (idx === -1) return { ...coreDefault };
+    const [oldRow] = remainingCustom.splice(idx, 1);
+    // Only a flat-hourly old row has a directly compatible $ field to carry
+    // over; a per-person/split row has no equivalent under the now-fixed
+    // hourly-flat core shape, so it's left blank -- the existing "missing
+    // field" highlighting immediately flags it, safer than silently
+    // carrying over a number that no longer means the same thing.
+    const rate = (oldRow.type !== 'per_person' && oldRow.mode !== 'split') ? oldRow.rate : undefined;
+    return { ...coreDefault, rate };
+  });
+  return { coreRates, remainingCustom };
+}
 
 function loadSettings() {
   let rates;
@@ -174,12 +206,32 @@ function loadSettings() {
   } catch (e) {
     rates = DEFAULT_RATES; // corrupted saved data — fall back rather than crash the whole page
   }
+
+  let coreRates = null;
+  try {
+    coreRates = JSON.parse(localStorage.getItem('ts_core_rates') || 'null');
+  } catch (e) {
+    coreRates = null;
+  }
+  if (!coreRates) {
+    // No saved core rates yet -- either a brand-new coach, or the first
+    // load since core rates existed at all. Migrate once and persist
+    // immediately, so this doesn't silently re-run on every load before
+    // the coach happens to touch Settings.
+    const migrated = migrateCoreRates(rates);
+    coreRates = migrated.coreRates;
+    rates = migrated.remainingCustom;
+    localStorage.setItem('ts_core_rates', JSON.stringify(coreRates));
+    localStorage.setItem('ts_rates', JSON.stringify(rates));
+  }
+
   const name = localStorage.getItem('ts_name') || '';
   const compNotes = localStorage.getItem('ts_compNotes') || '';
-  return { rates, name, compNotes };
+  return { rates, coreRates, name, compNotes };
 }
 function saveSettings() {
   localStorage.setItem('ts_rates', JSON.stringify(state.rates));
+  localStorage.setItem('ts_core_rates', JSON.stringify(state.coreRates));
   localStorage.setItem('ts_name', document.getElementById('coachName').value);
   localStorage.setItem('ts_compNotes', state.compNotes || '');
 }
@@ -479,9 +531,11 @@ function rateRuleMissingFields(r) {
 }
 function validateRates() {
   const problems = [];
-  if (state.rates.length === 0) {
-    problems.push('No pay rate rules configured — every booking would compute as $0. Add at least one rate below.');
-    return problems;
+  state.coreRates.forEach(r => {
+    if (rateRuleMissingFields(r).length) problems.push(`"${r.match}" rate: missing hourly rate.`);
+  });
+  if (state.rates.length === 0 && problems.length === 0) {
+    problems.push('No custom pay rate rules configured beyond PL/GL/PHS — any other booking type would compute as $0. Add a rate below if you have others.');
   }
   state.rates.forEach((r, i) => {
     const missing = rateRuleMissingFields(r);
@@ -539,7 +593,7 @@ function settingsMissingPieces() {
   const missing = [];
   if (!document.getElementById('coachName').value.trim()) missing.push('your name');
   if (!(state.compNotes || '').trim()) missing.push('compensation notes');
-  if (state.rates.some(r => rateRuleMissingFields(r).length)) missing.push('every pay rate filled in');
+  if (state.coreRates.some(r => rateRuleMissingFields(r).length) || state.rates.some(r => rateRuleMissingFields(r).length)) missing.push('every pay rate filled in');
   return missing;
 }
 function refreshBookmarkletGate() {
@@ -732,14 +786,22 @@ function parseSchedule(html) {
 // location and attendee count (nothing here is auto-defaulted silently;
 // anything unresolved lands in an "Unassigned" bucket for manual review).
 // ---------------------------------------------------------------------
+function ruleMatchesTitle(r, title) {
+  if (!r.match) return false;
+  const mode = r.matchMode || 'contains';
+  return mode === 'startsWith'
+    ? title.toUpperCase().startsWith(r.match.trim().toUpperCase())
+    : title.toLowerCase().includes(r.match.trim().toLowerCase());
+}
 function classifyRate(title) {
+  // Core rates (PL/GL/PHS) are checked first, unconditionally, in their own
+  // fixed order -- a coach's custom rows can never outrank them regardless
+  // of how those are dragged/reordered.
+  for (const r of state.coreRates) {
+    if (ruleMatchesTitle(r, title)) return r;
+  }
   for (const r of state.rates) {
-    if (!r.match) continue;
-    const mode = r.matchMode || 'contains';
-    const matches = mode === 'startsWith'
-      ? title.toUpperCase().startsWith(r.match.trim().toUpperCase())
-      : title.toLowerCase().includes(r.match.trim().toLowerCase());
-    if (matches) return r;
+    if (ruleMatchesTitle(r, title)) return r;
   }
   // Nothing configured matches this title — pay $0 rather than guessing a
   // plausible-looking number, so an unclassified booking is obviously wrong
