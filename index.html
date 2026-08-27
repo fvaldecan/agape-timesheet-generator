@@ -95,12 +95,16 @@ $40/hr on programmed groups, drills, classes"
       </div>
     </details>
     <p class="hint mt-14">
-      <strong>To use it:</strong> open your Club Automation schedule (Tools &rarr; Staff Scheduling), click the button, then
-      paste what it copies below.
+      <strong>To use it:</strong> open your Club Automation schedule (Tools &rarr; Staff Scheduling), then click the button
+      — it sends your schedule straight to this tab automatically. If it can't reach this tab, you'll get a
+      chance to paste it in manually instead.
+    </p>
+    <p class="hint mt-8">
+      <a href="#" onclick="revealPasteSection(); return false;">Trouble with the button? Paste your schedule manually</a>
     </p>
   </section>
 
-  <section>
+  <section id="pasteSection" class="hidden">
     <h2>3. Paste your schedule</h2>
     <p class="hint mt-0">
       Club Automation only shows one week at a time, so for a multi-week pay period, paste
@@ -234,6 +238,19 @@ function hideHandoffLoadingOverlay() {
 }
 function dismissHandoffLoadingOverlay() {
   hideHandoffLoadingOverlay();
+  revealPasteSection();
+}
+
+// The Paste section stays hidden until a coach actually needs it -- either
+// this, or the "Dismiss and paste manually" button above, having a real
+// use for it. Once revealed it stays revealed for the rest of this page
+// load; there's no path back to hidden, since re-hiding it after a coach
+// has started using it would just be confusing.
+function revealPasteSection() {
+  const section = document.getElementById('pasteSection');
+  if (!section) return;
+  section.classList.remove('hidden');
+  try { section.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* cosmetic only, ignore */ }
 }
 
 window.addEventListener('message', function (e) {
