@@ -628,7 +628,7 @@ function settingsMissingPieces() {
   const missing = [];
   if (!document.getElementById('coachName').value.trim()) missing.push('your name');
   if (!(state.compNotes || '').trim()) missing.push('compensation notes');
-  if (state.coreRates.some(r => rateRuleMissingFields(r).length) || state.rates.some(r => rateRuleMissingFields(r).length)) missing.push('every pay rate filled in');
+  if (state.coreRates.some(r => rateRuleMissingFields(r).length)) missing.push('your core pay rates filled in');
   return missing;
 }
 function refreshBookmarkletGate() {
