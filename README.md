@@ -13,14 +13,15 @@ static files.
    (right there on the page, step 0) up to their bookmarks bar — one-time
    setup, no separate file to dig through.
 2. Logs into Club Automation, opens their schedule, clicks the bookmark
-   from their bookmarks bar. It opens (or switches to) the app in a
-   browser tab and sends the schedule there directly — no copy/paste. The
-   app parses it automatically and shows its own review summary (found /
-   will-add / blocked / empty / duplicates) — nothing is added to the
-   sheet until you click **Add to sheet**. (If the hand-off can't reach
-   the app tab for some reason, it falls back to copying the schedule to
-   the clipboard instead, with a prompt to paste it in and hit **Parse**
-   manually.)
+   from their bookmarks bar. They stay on Club Automation while it
+   scrapes, then click **Send to timesheet app** once it's ready — that
+   opens (or switches to) the app in a browser tab and sends the schedule
+   there directly, no copy/paste. The app parses it automatically and
+   shows its own review summary (found / will-add / blocked / empty /
+   duplicates) — nothing is added to the sheet until you click **Add to
+   sheet**. (If the hand-off can't reach the app tab for some reason, it
+   falls back to copying the schedule to the clipboard instead, with a
+   prompt to paste it in and hit **Parse** manually.)
 3. If the pay period covers more than one week (common — usually 2),
    navigate to the next week in Club Automation and click the bookmark
    again — it reuses the same app tab, so the sheet already being built
