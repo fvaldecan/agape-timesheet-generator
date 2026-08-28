@@ -1334,7 +1334,7 @@ function confirmAdd() {
 // where their results will go, not have the whole section disappear.
 function renderEmptyResultsState() {
   const results = document.getElementById('results');
-  if (results) results.innerHTML = '<div class="empty">No entries yet — paste your schedule above to get started.</div>';
+  if (results) results.innerHTML = '<div class="empty">No entries yet — click "Get My Schedule" above to get started.</div>';
   const actions = document.getElementById('resultsActions');
   if (actions) actions.classList.add('hidden');
 }
@@ -1487,6 +1487,12 @@ function rateLabelFor(rule) {
   if (rule.mode === 'split') return `$${rule.clientRate ?? 0}&minus;$${rule.agapeCut ?? 0}/hr`;
   return `$${rule.rate ?? 0}/hr`;
 }
+// A per-person rule's value (e.g. "$20/person x 50%") isn't an hourly
+// figure at all, so the shift-detail field next to it needs a label that
+// doesn't call it one.
+function rateFieldLabel(rule) {
+  return rule.type === 'per_person' ? 'Pay rate' : 'Hourly wage';
+}
 function rateLabelPlain(rule) {
   if (!rule.match) return 'No rate matched';
   if (rule.type === 'per_person') return `$${rule.pricePerPerson ?? 0}/person x ${rule.coachShare ?? 0}%`;
@@ -1587,7 +1593,7 @@ function renderResults() {
   const { badOrderIds, overlapIds } = computeConflictIds(shifts);
 
   if (unmatchedRateCount > 0) {
-    html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unmatchedRateCount} entr${unmatchedRateCount === 1 ? 'y has' : 'ies have'} no matching rate rule</strong> — showing $0.00, marked "No rate matched" below. Add a rate rule in Settings, or fix the row's Type of class text so it matches one.</div>`;
+    html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${unmatchedRateCount} entr${unmatchedRateCount === 1 ? 'y has' : 'ies have'} no matching rate rule</strong> — showing $0.00, marked "No rate matched" below. Add a rate rule in Settings, or expand the row and click "+ Add rate rule for this."</div>`;
   }
   if (zeroPayCount > 0) {
     html += `<div class="warn warn-strong" role="status" aria-live="polite">&#9888; <strong>${zeroPayCount} entr${zeroPayCount === 1 ? 'y computes' : 'ies compute'} to $0.00 despite a matched rate</strong> — double check the rate or headcount below, or set a manual amount if that's intentional.</div>`;
@@ -1667,7 +1673,7 @@ function renderResults() {
               <select class="cell-input" aria-label="End time, ${escapeHtml(r.type) || 'row'} on ${dateDisplay}" onchange="setShiftField(${r.id},'endTime',this.value)">${timeOptionsHtml(r.endTime)}</select>
             </div>
             <div class="field">
-              <label>Hourly wage</label>
+              <label>${rateFieldLabel(r.rule)}</label>
               <div class="field-static">${rateLabelFor(r.rule)}</div>
               ${!r.rule.match ? `<button type="button" class="btn-compact mt-4" onclick="addRateRuleFromShift(${r.id})">+ Add rate rule for this</button>` : ''}
             </div>
