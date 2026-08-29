@@ -35,11 +35,11 @@
       <div class="config-grid" id="rateRows"></div>
       <button class="btn secondary mt-6" onclick="addRateRow()">+ add a rate</button>
       <p class="hint-sm mt-8">
-        Type a word from your booking titles (like "PL" or "Drill"), choose
-        <strong>start</strong> or <strong>anywhere</strong> in the title, and set the pay. First
-        match wins, so put specific rows above general ones. <strong>Per-person split</strong> is
-        for group classes paid per attendee — you'll enter the headcount after pasting. "# people"
-        is editable on every row (handy for a semi-private with 2 students).
+        Type a word from the booking's type of class (like "PL" or "Drill"), choose whether it
+        <strong>starts with</strong> or just <strong>contains</strong> that word, and set the pay.
+        First match wins, so put specific rows above general ones. <strong>Per person</strong> is
+        for group classes paid per attendee — you'll enter the headcount once your schedule comes
+        in. "# people" is editable on every row (handy for a semi-private with 2 students).
       </p>
       <div id="ratesDirtyBanner" role="status" aria-live="polite">
         <span>&#9888; You changed a rate. The sheet below is still showing the old numbers.</span>
@@ -427,9 +427,9 @@ function renderRates() {
       const agapeCut = r.agapeCut;
       const net = (clientRate ?? 0) - (agapeCut ?? 0);
       typeFields = `
-        <select class="rate-mode" aria-label="Pricing mode" onchange="setRateMode(${i}, this.value)">
-          <option value="flat">Flat $/hr</option>
-          <option value="split" selected>Client rate − Agape cut</option>
+        <select class="rate-mode" aria-label="Pricing mode" title="How your hourly pay is worked out" onchange="setRateMode(${i}, this.value)">
+          <option value="flat">Flat rate</option>
+          <option value="split" selected>Client rate minus Agape's cut</option>
         </select>
         <span class="affix">$<input class="${missCls('clientRate')}" value="${clientRate ?? ''}" type="number" step="0.01" title="What the client is billed per hour" aria-label="What the client is billed per hour"${missAttr('clientRate')}${missPlaceholder('clientRate')}
           onchange="state.rates[${i}].clientRate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
@@ -444,9 +444,9 @@ function renderRates() {
       `;
     } else {
       typeFields = `
-        <select class="rate-mode" aria-label="Pricing mode" onchange="setRateMode(${i}, this.value)">
-          <option value="flat" selected>Flat $/hr</option>
-          <option value="split">Client rate − Agape cut</option>
+        <select class="rate-mode" aria-label="Pricing mode" title="How your hourly pay is worked out" onchange="setRateMode(${i}, this.value)">
+          <option value="flat" selected>Flat rate</option>
+          <option value="split">Client rate minus Agape's cut</option>
         </select>
         <span class="affix">$<input class="${missCls('rate')}" value="${r.rate ?? ''}" type="number" step="0.01" title="Pay per hour" aria-label="Pay per hour"${missAttr('rate')}${missPlaceholder('rate')}
           onchange="state.rates[${i}].rate=this.value===''?undefined:Number(this.value);saveSettings();renderRates();markRatesDirty();"></span>
@@ -464,15 +464,16 @@ function renderRates() {
         <button type="button" class="rate-move-btn" aria-label="Move ${escapeHtml(rowLabel)} up" title="Move up" onclick="moveRateRow(${i}, -1)"${i === 0 ? ' disabled' : ''}>&#9650;</button>
         <button type="button" class="rate-move-btn" aria-label="Move ${escapeHtml(rowLabel)} down" title="Move down" onclick="moveRateRow(${i}, 1)"${i === state.rates.length - 1 ? ' disabled' : ''}>&#9660;</button>
       </span>
-      <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="${missing.includes('match') ? 'Title text... (required)' : 'Title text...'}" aria-label="Match text from booking title"${missAttr('match')}
-        onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
-      <select class="rate-matchmode" aria-label="Match mode" onchange="state.rates[${i}].matchMode=this.value;saveSettings();renderRates();markRatesDirty();">
-        <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>Starts with</option>
-        <option value="contains" ${r.matchMode !== 'startsWith' ? 'selected' : ''}>Contains</option>
+      <span class="rate-suffix">Type of class</span>
+      <select class="rate-matchmode" aria-label="Match mode" title="Where in the type of class to look for this text" onchange="state.rates[${i}].matchMode=this.value;saveSettings();renderRates();markRatesDirty();">
+        <option value="startsWith" ${r.matchMode === 'startsWith' ? 'selected' : ''}>starts with</option>
+        <option value="contains" ${r.matchMode !== 'startsWith' ? 'selected' : ''}>contains</option>
       </select>
-      <select class="rate-type" aria-label="Rate type" onchange="setRateType(${i}, this.value)">
+      <input class="rate-match${missCls('match')}" value="${escapeHtml(r.match)}" placeholder="${missing.includes('match') ? 'e.g. PL, Drill... (required)' : 'e.g. PL, Drill...'}" title="Text from the type of class that this rate applies to" aria-label="Type of class text to match"${missAttr('match')}
+        onchange="state.rates[${i}].match=this.value;saveSettings();renderRates();markRatesDirty();">
+      <select class="rate-type" aria-label="Rate type" title="How this booking is priced" onchange="setRateType(${i}, this.value)">
         <option value="hourly" ${r.type !== 'per_person' ? 'selected' : ''}>Hourly</option>
-        <option value="per_person" ${r.type === 'per_person' ? 'selected' : ''}>Per-person split</option>
+        <option value="per_person" ${r.type === 'per_person' ? 'selected' : ''}>Per person</option>
       </select>
       <span class="rate-fields">${typeFields}</span>
       <button aria-label="Remove ${escapeHtml(rowLabel)}" onclick="state.rates.splice(${i},1);renderRates();saveSettings();markRatesDirty();">remove</button>
