@@ -163,10 +163,10 @@ $40/hr on programmed groups, drills, classes"
 // Settings persistence (localStorage — per-browser, never committed to repo)
 // ---------------------------------------------------------------------
 // Pay figures are intentionally left blank — this is a public repo, so no
-// real Agape rate numbers ship in the source. The row shapes (title match +
-// pricing mode) are still filled in as a starting template; each coach fills
-// in their own $ amounts in Settings on first use, and the app's own
-// "missing field" highlighting guides them to do it.
+// real Agape rate numbers ship in the source. The core row shapes (title
+// match + pricing mode) are still filled in as a starting template; each
+// coach fills in their own $ amounts in Settings on first use, and the
+// app's own "missing field" highlighting guides them to do it.
 //
 // PL/GL/PHS are every coach's standard categories, not something each coach
 // invents their own match text for -- they live in their own fixed list
@@ -178,9 +178,14 @@ const CORE_RATE_DEFAULTS = [
   { match: "GL", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
   { match: "PHS", matchMode: "startsWith", type: "hourly", mode: "flat", defaultPeople: 1 },
 ];
-const DEFAULT_RATES = [
-  { match: "group class", matchMode: "contains", type: "per_person", coachShare: 50 },
-];
+// Empty, not a pre-seeded "group class" guess -- a custom row with no
+// pricePerPerson set renders as incomplete from the coach's very first
+// load, and validateRates() requires every *existing* custom row to be
+// complete before Parse/Add works. That silently blocked a brand-new
+// coach who doesn't even teach group classes until they noticed and
+// deleted a row they never added. A coach who does teach them adds their
+// own row via "+ add a rate", same as any other custom category.
+const DEFAULT_RATES = [];
 
 // One-time migration for a coach who already has a custom "PL" (or GL/PHS)
 // row: without this, they'd end up with two -- their old one (with a real
@@ -568,6 +573,7 @@ function rateRuleMissingFields(r) {
 function validateRates() {
   const problems = [];
   if (!document.getElementById('coachName').value.trim()) problems.push('Enter your name.');
+  if (!(state.compNotes || '').trim()) problems.push('Enter your compensation notes.');
   state.coreRates.forEach(r => {
     if (rateRuleMissingFields(r).length) problems.push(`"${r.match}" rate: missing hourly rate.`);
   });
@@ -643,6 +649,23 @@ function refreshBookmarkletGate() {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('hidden', missing.length > 0);
   });
+
+  // Same red field-missing/required treatment the core pay rates already
+  // get -- these two are just as required, so an empty one shouldn't look
+  // any less obviously unfinished than a blank $/hr box does.
+  const nameInput = document.getElementById('coachName');
+  if (nameInput) {
+    const nameMissing = !nameInput.value.trim();
+    nameInput.classList.toggle('field-missing', nameMissing);
+    if (nameMissing) nameInput.setAttribute('aria-invalid', 'true'); else nameInput.removeAttribute('aria-invalid');
+    nameInput.placeholder = nameMissing ? 'required' : '';
+  }
+  const compNotesInput = document.getElementById('compNotes');
+  if (compNotesInput) {
+    const compNotesMissing = !(state.compNotes || '').trim();
+    compNotesInput.classList.toggle('field-missing', compNotesMissing);
+    if (compNotesMissing) compNotesInput.setAttribute('aria-invalid', 'true'); else compNotesInput.removeAttribute('aria-invalid');
+  }
 }
 function reapplyRatesToSheet() {
   const updateTimesheetStatus = document.getElementById('updateTimesheetStatus');
