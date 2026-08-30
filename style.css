@@ -133,8 +133,10 @@ summary {
 .rate-move-btn:hover:not(:disabled) { color: var(--brand-purple); border-color: var(--brand-purple); }
 .rate-move-btn:disabled { opacity: 0.3; cursor: default; }
 .rate-row.rate-row-incomplete { border-left: 3px solid var(--warn); }
-.rate-row input.field-missing { border-color: var(--warn); background: var(--warn-dim); }
-.rate-row input.field-missing::placeholder { color: var(--warn); opacity: 1; }
+/* Not scoped to .rate-row -- also used on the name/compensation-notes
+   settings fields, which are required the same way a rate row is. */
+input.field-missing, textarea.field-missing { border-color: var(--warn); background: var(--warn-dim); }
+input.field-missing::placeholder, textarea.field-missing::placeholder { color: var(--warn); opacity: 1; }
 .rate-row input, .rate-row select {
   padding: 7px 9px;
   border: 1px solid var(--line);
