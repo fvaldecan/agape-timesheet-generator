@@ -13,24 +13,29 @@ static files.
    (right there on the page, step 0) up to their bookmarks bar — one-time
    setup, no separate file to dig through.
 2. Logs into Club Automation, opens their schedule, clicks the bookmark
-   from their bookmarks bar. It copies the schedule data to their
-   clipboard, alerting them with a count of real bookings vs.
-   blocked/empty slots *before* anything gets pasted anywhere.
-3. Pastes it into this app, hits **Parse**. The app shows its own review
-   summary (found / will-add / blocked / empty / duplicates) — nothing is
-   added to the sheet until you click **Add to sheet**.
-4. If the pay period covers more than one week (common — usually 2), copy
-   the next week from Club Automation and repeat steps 2-3. Duplicate
-   entries (same date, time, and type) are automatically skipped.
-5. Reviews the sheet, grouped by **location** and then by **week** within
+   from their bookmarks bar. They stay on Club Automation while it
+   scrapes, then click **Send to timesheet app** once it's ready — that
+   opens (or switches to) the app in a browser tab and sends the schedule
+   there directly, no copy/paste. The app parses it automatically and
+   shows its own review summary (found / will-add / blocked / empty /
+   duplicates) — nothing is added to the sheet until you click **Add to
+   sheet**. (If the hand-off can't reach the app tab for some reason, it
+   falls back to copying the schedule to the clipboard instead, with a
+   prompt to paste it in and hit **Parse** manually.)
+3. If the pay period covers more than one week (common — usually 2),
+   navigate to the next week in Club Automation and click the bookmark
+   again — it reuses the same app tab, so the sheet already being built
+   isn't lost. Duplicate entries (same date, time, and type) are
+   automatically skipped.
+4. Reviews the sheet, grouped by **location** and then by **week** within
    each location (collapsible, so a multi-week sheet doesn't turn into an
    endless scroll). Each entry is a single summary line — click it to
    expand every editable field (date, type, sport, time, location, rate,
    headcount, amount). Anything that needs a look (missing location, no
    matching rate rule, a bad start/end time, or an overlap with another
    entry) shows a warning icon and auto-expands so it can't be missed.
-6. Downloads a `.docx` or `.csv` commission sheet once everything's in.
-7. **Clear & start over** wipes everything to begin a fresh pay period.
+5. Downloads a `.docx` or `.csv` commission sheet once everything's in.
+6. **Clear & start over** wipes everything to begin a fresh pay period.
 
 Your schedule data never leaves your browser. The schedule HTML, rate
 settings, and compensation notes all stay local — there's no client
@@ -118,7 +123,7 @@ it, and everything they enter stays local to their browser (see above).
   `date_end`, always 6 days apart in the page's own form fields), so a
   2+ week pay period always needs multiple captures. Parsing is additive
   (see "How it works" above) with automatic duplicate detection, so just
-  paste each week in turn.
+  click the bookmark again for each week in turn.
 - **Location and attendance aren't in the schedule page HTML — they load
   on click.** Confirmed: clicking an event fires an AJAX call that returns
   a popup with Location, Service, and Attendance (`current / max`). The
