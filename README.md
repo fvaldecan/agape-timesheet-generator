@@ -9,19 +9,25 @@ static files.
 
 ## How it works
 
-1. Coach opens the app and drags the **CA Schedule** bookmarklet button
-   (right there on the page, step 0) up to their bookmarks bar — one-time
-   setup, no separate file to dig through.
+1. Coach fills in **Settings** first (step 1 on the page) — name,
+   compensation notes, and pay rates are all required before anything
+   else works, so a sheet never quietly goes out with a blank name or a
+   $0 rate. Then drags the **"Get My Schedule"** bookmarklet button
+   (step 2) up to their bookmarks bar — one-time setup, no separate file
+   to dig through.
 2. Logs into Club Automation, opens their schedule, clicks the bookmark
    from their bookmarks bar. They stay on Club Automation while it
-   scrapes, then click **Send to timesheet app** once it's ready — that
-   opens (or switches to) the app in a browser tab and sends the schedule
-   there directly, no copy/paste. The app parses it automatically and
-   shows its own review summary (found / will-add / blocked / empty /
-   duplicates) — nothing is added to the sheet until you click **Add to
-   sheet**. (If the hand-off can't reach the app tab for some reason, it
-   falls back to copying the schedule to the clipboard instead, with a
-   prompt to paste it in and hit **Parse** manually.)
+   scrapes — if it finds a booking type with no rate set up yet, it asks
+   right there (flat hourly, or per-person with a percentage to the
+   coach) instead of just showing $0.00 later. Once it's ready, clicking
+   **Send to timesheet app** opens (or switches to) the app in a browser
+   tab and sends the schedule there directly, no copy/paste. The app
+   parses it automatically and shows its own review summary (found /
+   will-add / blocked / empty / duplicates) — nothing is added to the
+   sheet until you click **Add to sheet**. (If the hand-off can't reach
+   the app tab for some reason, it falls back to copying the schedule to
+   the clipboard instead, with a prompt to paste it in and hit **Parse**
+   manually.)
 3. If the pay period covers more than one week (common — usually 2),
    navigate to the next week in Club Automation and click the bookmark
    again — it reuses the same app tab, so the sheet already being built
@@ -95,19 +101,27 @@ like Cloudflare Access. Two deployments, one repo.
 
 ### Rate/comp structure
 
-Each rate rule matches on title text (Starts with / Contains, your
-choice) and is either **Hourly** or **Per-person split**. Hourly rules
-have two pricing modes: a flat `$/hr` amount, or `client rate − Agape's
-cut` (e.g. billed at $65/hr, Agape takes $20, you get $45/hr) — useful
-since the cut varies by coach. Every hourly rule also has a default "#
-people," mainly for flagging semi-private lessons.
+Every coach starts with three fixed **core rates** — Private Lesson (PL),
+Group Lesson (GL), Private Hitting Session (PHS) — plus any number of
+**custom rates** for anything else. Each custom rate matches on the
+booking's type of class (Starts with / Contains, your choice) and is
+either **Hourly** or **Per person**. Hourly rules have two pricing modes:
+a flat `$/hr` amount, or `client rate minus Agape's cut` (e.g. billed at
+$65/hr, Agape takes $20, you get $45/hr) — useful since the cut varies by
+coach. Every hourly rule also has a default "# people," mainly for
+flagging semi-private lessons.
 
-`index.html`'s `DEFAULT_RATES` ships with the row *shapes* pre-filled
-(match text, pricing mode) but the actual dollar amounts left blank on
-purpose — this repo is public, so no real Agape pricing lives in the
-source. The app's own "missing field" highlighting walks each coach
-through filling in their own numbers in Settings the first time they use
-it, and everything they enter stays local to their browser (see above).
+`index.html`'s `CORE_RATE_DEFAULTS` ships with the three core rows'
+*shapes* pre-filled (match text, pricing mode) but the actual dollar
+amounts left blank on purpose — this repo is public, so no real Agape
+pricing lives in the source. `DEFAULT_RATES` (the custom-rate list) starts
+empty; there's nothing to guess at custom rates for since they vary coach
+to coach, and a pre-seeded guess row that isn't actually complete would
+just block Parse/Add until someone noticed and deleted it. The app's own
+"missing field" highlighting (name, compensation notes, and every rate —
+all shown in red until filled in) walks each coach through filling in
+their own numbers in Settings the first time they use it, and everything
+they enter stays local to their browser (see above).
 
 ## Files
 
@@ -146,9 +160,12 @@ it, and everything they enter stays local to their browser (see above).
   "- CM" title-suffix hint) can be corrected directly — editing it moves
   the entry into the right location/week group immediately.
 - **Booking titles that don't match any rate rule are flagged, not
-  silently zeroed.** If nothing in Settings matches a booking's title,
-  it's priced at $0.00 rather than guessing. Fix it by adding a rate rule
-  that matches, or by editing the entry's Type of class text.
+  silently zeroed.** The bookmarklet already asks about most of these
+  up front while scraping (see "How it works" above), but a title you
+  skip there — or one from a schedule pasted in manually — still shows
+  up priced at $0.00 rather than a guess. Fix it by adding a rate rule
+  that matches, or by clicking "+ Add rate rule for this" on the entry
+  itself.
 - **A missing location, an unmatched rate, an end time before its start
   time, and an entry overlapping another one's time all share one warning
   mechanic.** Any of those four conditions puts a warning icon on that
@@ -162,7 +179,7 @@ it, and everything they enter stays local to their browser (see above).
   heads-up, not a hard stop — but exporting (CSV, docx, or print) with any
   of these still outstanding asks for confirmation first.
 - **Group class headcount isn't in the calendar data**, so it can't be
-  auto-detected. Any rate rule set to "Per-person split" shows an editable
+  auto-detected. Any rate rule set to "Per person" shows an editable
   headcount field per session. Hourly rules also show an editable "#
   people" field (defaulted from the rule, usually 1) — purely
   informational for hourly pricing, but useful for flagging semi-private
