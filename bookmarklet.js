@@ -580,12 +580,16 @@
   // it exactly as unmatched as it is today — $0.00 with a warning icon in
   // the app, nothing lost, nothing forced.
   //
-  // Two shapes on offer: flat hourly (rule.type='hourly'), or per-person
-  // per-session with a percentage cut (rule.type='per_person') — the
-  // latter covers group/clinic pricing like "$20/person per session,
-  // Agape keeps 50%" regardless of how long the session runs. Headcount
-  // itself isn't asked here — the app already collects that per-session,
-  // not per rate rule (see rate row rendering in index.html).
+  // Two shapes on offer: flat hourly (rule.type='hourly'), or per person
+  // per session with a percentage going to the coach (rule.type=
+  // 'per_person') — the latter covers group/clinic pricing like "$20 per
+  // person, 50% to you" regardless of how long the session runs.
+  // Asking directly for the coach's own share (not Agape's, then
+  // subtracting) matches how the rate editor itself frames a per-person
+  // row ("$X per person x Y% to coach") — one less mental subtraction for
+  // the coach, and coachShare is stored exactly as answered, no inverting.
+  // Headcount itself isn't asked here — the app already collects that
+  // per-session, not per rate rule (see rate row rendering in index.html).
   if (titlesToPrompt.length) content.textContent = 'Reviewing new booking types...';
   var newRateRules = [];
   for (var ti = 0; ti < titlesToPrompt.length; ti++) {
@@ -595,7 +599,7 @@
     if (!setUp) continue;
 
     var isFlat = confirm('Is "' + title + '" a flat hourly rate?\n\n' +
-      'OK = flat $/hr.\nCancel = priced per person per session instead (e.g. $20/person, Agape keeps a %).');
+      'OK = a flat rate per hour.\nCancel = priced per person instead, with a percentage of that going to you (e.g. $20 per person, 50% to you).');
 
     if (isFlat) {
       var rate = promptForNumber('What do you get paid per hour for "' + title + '"?');
@@ -604,9 +608,9 @@
     } else {
       var pricePerPerson = promptForNumber('What does each person pay for a session of "' + title + '"?');
       if (pricePerPerson === null) continue;
-      var agapeCutPct = promptForNumber('What percentage does Agape keep for "' + title + '"?', 100);
-      if (agapeCutPct === null) continue;
-      newRateRules.push({ match: title, matchMode: 'startsWith', type: 'per_person', pricePerPerson: pricePerPerson, coachShare: 100 - agapeCutPct });
+      var coachSharePct = promptForNumber('What percentage of that goes to you for "' + title + '"?', 100);
+      if (coachSharePct === null) continue;
+      newRateRules.push({ match: title, matchMode: 'startsWith', type: 'per_person', pricePerPerson: pricePerPerson, coachShare: coachSharePct });
     }
   }
 
