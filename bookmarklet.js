@@ -495,7 +495,7 @@
   var clone = el.cloneNode(true);
   var liveBlocks = el.querySelectorAll('.eventBlock');
   var cloneBlocks = clone.querySelectorAll('.eventBlock');
-  var ok = 0, fail = 0, skipped = 0, blockedCount = 0, emptyCount = 0, realCount = 0;
+  var ok = 0, fail = 0, skipped = 0, blockedCount = 0, emptyCount = 0, courtTimeCount = 0, realCount = 0;
   // Every distinct real-booking title seen this run, piggybacking on the
   // titleOf()/subtitleOf() calls already made per iteration below — later
   // checked against AGAPE_RULES_SNAPSHOT to decide what to prompt for.
@@ -506,8 +506,16 @@
     var sub = subtitleOf(liveBlocks[i]);
     var isBlocked = t.toLowerCase().indexOf('blocked') !== -1;
     var isEmptySlot = t.indexOf('PL') === 0 && !sub;
+    // Plain customer court rentals carry no coaching signal and are never
+    // payroll-relevant (not a lesson or clinic) — skip them before the
+    // event-full-info fetch rather than wasting a request, and before they
+    // count toward realCount or get offered up in the rate-prompting Q&A.
+    // Exact match (not "contains"), so a real class whose title happens to
+    // mention court time isn't caught by accident.
+    var isCourtTime = t.trim().toLowerCase() === 'court time';
     if (isBlocked) { blockedCount++; continue; }
     if (isEmptySlot) { emptyCount++; continue; }
+    if (isCourtTime) { courtTimeCount++; continue; }
     realCount++;
     var enrichedT = enrichedTitleOf(t, sub);
     if (!seenTitles[enrichedT]) { seenTitles[enrichedT] = true; distinctTitles.push(enrichedT); }
@@ -625,6 +633,7 @@
   var summaryLines = [realCount + ' real booking' + (realCount === 1 ? '' : 's') + ' found (' + ok + ' with location/attendance details' + (fail ? ', ' + fail + ' failed' : '') + ').'];
   if (usedFallback) summaryLines.push("Couldn't auto-fetch the full date range — only grabbed what's currently on screen. Navigate to any missing week and click the button again if needed.");
   if (blockedCount) summaryLines.push(blockedCount + ' blocked time block' + (blockedCount === 1 ? '' : 's') + ' (ignored, unpaid).');
+  if (courtTimeCount) summaryLines.push(courtTimeCount + ' court rental' + (courtTimeCount === 1 ? '' : 's') + ' (Court Time, ignored — not a lesson or clinic).');
   if (emptyCount) summaryLines.push(emptyCount + ' empty/unbooked slot' + (emptyCount === 1 ? '' : 's') + ' (ignored) — worth checking those in Club Automation if that seems off.');
   if (newRateRules.length) summaryLines.push('Set up ' + newRateRules.length + ' new pay rate' + (newRateRules.length === 1 ? '' : 's') + '.');
   var skippedCount = titlesToPrompt.length - newRateRules.length;
