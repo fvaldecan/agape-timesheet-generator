@@ -64,7 +64,7 @@ boundary, check DevTools → Network on a real click and compare.
 4. If it finds a booking type you don't have a pay rate for yet, you'll
    get a series of pop-up questions — one "set this up now?" confirmation,
    then either an hourly rate or a per-person price plus what percentage
-   Agape keeps. Cancel any of them to skip that title — it'll just show
+   goes to you. Cancel any of them to skip that title — it'll just show
    $0.00 with a warning on your sheet until you fix it later in Settings.
 5. When it's done, that same banner shows a **Send to timesheet app**
    button. Click it and *then* it opens (or switches to) the timesheet app
