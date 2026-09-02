@@ -153,6 +153,11 @@ they enter stays local to their browser (see above).
   real lessons and are excluded during parsing. If a real booking is ever
   missing a client name for some other reason, it'll silently disappear
   too — spot check the total against what you expect.
+- **"Court Time" bookings are excluded too** — plain customer court
+  rentals with no coach attached, so they're never payroll-relevant.
+  This is an exact match on the booking's title, not a partial one, so a
+  real class whose title happens to mention court time won't be caught
+  by accident.
 - **No location roster.** Every private lesson lands in an **Unassigned**
   section until you pick a location for it that week — nothing is
   remembered client-to-client, since the same client can attend either
