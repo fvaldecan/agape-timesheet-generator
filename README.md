@@ -7,6 +7,24 @@ static files.
 
 **[Try it live](https://fvaldecan.github.io/agape-timesheet-generator/)**
 
+## Video walkthroughs
+
+### Setting up & first use
+
+[![Setting up & first use](media/onboarding-thumbnail.png)](PASTE_YOUTUBE_LINK_HERE)
+
+Click to watch on YouTube — walks through filling in Settings (name, pay
+rates, compensation notes), dragging the "Get My Schedule" bookmarklet
+button, and pulling in a schedule for the first time.
+
+### Quick start
+
+[![Quick start](https://img.youtube.com/vi/eL4GnbTQ5kY/maxresdefault.jpg)](https://youtu.be/eL4GnbTQ5kY)
+
+Click to watch on YouTube — a short run-through of generating a sheet
+start to finish once setup is done: grab the schedule with the bookmarklet,
+review what it found, add it to the sheet, and export.
+
 ## How it works
 
 1. Coach fills in **Settings** first (step 1 on the page) — name,
@@ -128,6 +146,7 @@ they enter stays local to their browser (see above).
 - `index.html` — the whole app (parsing, calculation, export, everything)
 - `style.css` — all styling, kept out of `index.html` so the markup stays readable
 - `BOOKMARKLET.md` — the schedule-copy bookmarklet, code + install steps
+- `media/` — thumbnail images for the video walkthroughs above (the videos themselves live on YouTube, linked from each thumbnail)
 - `README.md` — this file
 
 ## Known limitations
