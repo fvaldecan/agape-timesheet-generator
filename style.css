@@ -365,11 +365,19 @@ footer { margin-top: 40px; font-size: 12px; color: var(--dim); font-family: var(
 .hidden { display: none; }
 .text-normal { text-transform: none; letter-spacing: 0; }
 
-/* Video walkthru — poster image, click swaps in the YouTube player in place */
+/* Video walkthru — compact side-by-side posters; a click swaps in the
+   YouTube player in place so a normal page load never touches YouTube. */
+.walkthru-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.walkthru-item { flex: 1 1 200px; max-width: 300px; margin: 0; }
+.walkthru-item figcaption {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}
 .quickstart-video {
   position: relative;
   width: 100%;
-  max-width: 420px;
   aspect-ratio: 16 / 9;
   border: 1px solid var(--line);
   overflow: hidden;
