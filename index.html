@@ -19,6 +19,17 @@
   </header>
 
   <section>
+    <h2>Video walkthru</h2>
+    <div class="quickstart-video">
+      <button type="button" class="quickstart-poster" onclick="playQuickStart(this)" aria-label="Play the video walkthru">
+        <img src="https://img.youtube.com/vi/eL4GnbTQ5kY/maxresdefault.jpg" alt="" loading="lazy">
+        <span class="quickstart-play" aria-hidden="true">&#9658;</span>
+      </button>
+    </div>
+    <div class="sub mt-2">Plays here — hosted on YouTube.</div>
+  </section>
+
+  <section>
     <h2>1. Your settings <span class="text-normal">(remembered next time you come back)</span></h2>
     <div class="row">
       <label for="coachName" class="field-label-inline">Name on sheet</label>
@@ -1970,6 +1981,17 @@ function triggerDownload(blob, filename) {
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Video walkthru: swap the poster image for the YouTube player only after a
+// click, so a normal page load never pulls anything from YouTube.
+function playQuickStart(btn) {
+  const frame = document.createElement('iframe');
+  frame.src = 'https://www.youtube-nocookie.com/embed/eL4GnbTQ5kY?autoplay=1&rel=0';
+  frame.title = 'Video walkthru';
+  frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+  frame.allowFullscreen = true;
+  btn.parentNode.replaceChildren(frame);
 }
 </script>
 

@@ -364,6 +364,44 @@ footer { margin-top: 40px; font-size: 12px; color: var(--dim); font-family: var(
 /* ------------------------------------------------------------------ */
 .hidden { display: none; }
 .text-normal { text-transform: none; letter-spacing: 0; }
+
+/* Video walkthru — poster image, click swaps in the YouTube player in place */
+.quickstart-video {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.quickstart-video iframe { width: 100%; height: 100%; border: 0; display: block; }
+.quickstart-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.quickstart-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.quickstart-play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 4px;
+  border-radius: 50%;
+  background: var(--brand-purple);
+  color: #fff;
+  font-size: 20px;
+}
+.quickstart-poster:hover .quickstart-play { background: #502b6e; }
 .hint { font-size: 13px; color: #5a5f57; }
 .hint-sm { font-size: 12px; color: var(--dim); }
 .field-label { display: block; font-size: 12px; }
