@@ -20,11 +20,25 @@
 
   <section>
     <h2>Video walkthru</h2>
-    <div class="quickstart-video">
-      <button type="button" class="quickstart-poster" onclick="playQuickStart(this)" aria-label="Play the video walkthru">
-        <img src="https://img.youtube.com/vi/eL4GnbTQ5kY/maxresdefault.jpg" alt="" loading="lazy">
-        <span class="quickstart-play" aria-hidden="true">&#9658;</span>
-      </button>
+    <div class="walkthru-grid">
+      <figure class="walkthru-item">
+        <div class="quickstart-video">
+          <button type="button" class="quickstart-poster" onclick="playWalkthru(this, 'eL4GnbTQ5kY')" aria-label="Play the quick start walkthru">
+            <img src="https://img.youtube.com/vi/eL4GnbTQ5kY/maxresdefault.jpg" alt="" loading="lazy">
+            <span class="quickstart-play" aria-hidden="true">&#9658;</span>
+          </button>
+        </div>
+        <figcaption>Quick start</figcaption>
+      </figure>
+      <figure class="walkthru-item">
+        <div class="quickstart-video">
+          <button type="button" class="quickstart-poster" onclick="playWalkthru(this, 'nAs2P-MNZvs')" aria-label="Play the full-time schedule example">
+            <img src="https://img.youtube.com/vi/nAs2P-MNZvs/maxresdefault.jpg" alt="" loading="lazy">
+            <span class="quickstart-play" aria-hidden="true">&#9658;</span>
+          </button>
+        </div>
+        <figcaption>Full-time schedule example</figcaption>
+      </figure>
     </div>
     <div class="sub mt-2">Plays here — hosted on YouTube.</div>
   </section>
@@ -1985,9 +1999,9 @@ function triggerDownload(blob, filename) {
 
 // Video walkthru: swap the poster image for the YouTube player only after a
 // click, so a normal page load never pulls anything from YouTube.
-function playQuickStart(btn) {
+function playWalkthru(btn, videoId) {
   const frame = document.createElement('iframe');
-  frame.src = 'https://www.youtube-nocookie.com/embed/eL4GnbTQ5kY?autoplay=1&rel=0';
+  frame.src = 'https://www.youtube-nocookie.com/embed/' + videoId + '?autoplay=1&rel=0';
   frame.title = 'Video walkthru';
   frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
   frame.allowFullscreen = true;
